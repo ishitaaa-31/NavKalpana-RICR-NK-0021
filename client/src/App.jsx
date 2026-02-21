@@ -4,6 +4,7 @@ import Home from './pages/Home';
 // import Register from "./pages/Register";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
+import LandingPage from './pages/Landingpage';
 const App = () => {
   return (
  <>
@@ -15,6 +16,7 @@ const App = () => {
           {/* <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} /> */}
           <Route path="/login" element={<Login />} />
+          <Route path="/landingPage" element={<LandingPage/>}/>
           {/* <Route path="/register" element={<Register />} /> */}
           {/* <Route path="/user-dashboard" element={<UserDashboard />} />
           <Route path="/rider-dashboard" element={<RiderDashboard />} />

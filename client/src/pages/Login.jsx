@@ -73,7 +73,7 @@ export default function Login() {
 
           {/* Sign In Button */}
           <button className="w-full py-2.5 rounded-lg text-white font-medium 
-                             bg-gradient-to-r from-blue-600 to-blue-700 
+                             bg-linear-to-r from-blue-600 to-blue-700 
                              hover:from-blue-700 hover:to-blue-800 
                              transition duration-300 shadow-md">
             Sign in

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import MapComponent from "../components/MapComponent.jsx";
 
 const LandingPage = () => {
   const [form, setForm] = useState({
@@ -11,8 +12,15 @@ const LandingPage = () => {
     charge: 95,
   });
 
+  const [showMap, setShowMap] = useState(false);
+  const [distance, setDistance] = useState(0);
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = () => {
+    setShowMap(true);
   };
 
   return (
@@ -23,7 +31,7 @@ const LandingPage = () => {
         <h1 className="text-2xl font-bold tracking-wide">
           ⚡ VoltPath
         </h1>
-        <button className="bg-white text-black px-4 py-2 rounded-full font-medium hover:scale-105 transition">
+        <button className="bg-white text-black px-4 py-2 rounded-full">
           Get Started
         </button>
       </div>
@@ -33,23 +41,18 @@ const LandingPage = () => {
 
         {/* LEFT SIDE */}
         <div className="max-w-lg space-y-6">
-          <h2 className="text-4xl font-bold leading-tight">
+          <h2 className="text-4xl font-bold">
             Plan Smart EV Journeys 🚗⚡
           </h2>
-          <p className="text-gray-300">
-            Optimize your route with intelligent charging stops and never worry
-            about battery again.
-          </p>
 
-          {/* Route Input Card */}
-          <div className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl border border-white/20 shadow-xl space-y-4">
+          <div className="bg-white/10 p-6 rounded-2xl space-y-4">
 
             <input
               name="start"
               placeholder="📍 Start Location"
               value={form.start}
               onChange={handleChange}
-              className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 focus:outline-none focus:ring-2 focus:to-blue-500"
+              className="w-full p-3 rounded-lg bg-black/30 border"
             />
 
             <input
@@ -57,64 +60,68 @@ const LandingPage = () => {
               placeholder="🏁 Destination"
               value={form.destination}
               onChange={handleChange}
-              className="w-full p-3 rounded-lg bg-black/30 border border-gray-600 focus:outline-none focus:ring-2 focus:to-blue-500"
+              className="w-full p-3 rounded-lg bg-black/30 border"
             />
 
-            <button className="w-full bg-blue-500 hover:bg-blue-500 py-3 rounded-lg font-semibold transition">
+            <button
+              onClick={handleSubmit}
+              className="w-full bg-blue-500 py-3 rounded-lg font-semibold"
+            >
               ⚡ Calculate Route
             </button>
           </div>
         </div>
 
         {/* RIGHT SIDE */}
-        <div className="w-full max-w-md bg-white/10 backdrop-blur-lg p-6 rounded-2xl border border-white/20 shadow-xl">
+        <div className="w-full max-w-md bg-white/10 p-6 rounded-2xl">
 
           <h3 className="text-lg font-semibold mb-4">
             🔋 Vehicle Stats
           </h3>
 
           <div className="space-y-4">
-
             {[
               { label: "Battery (kWh)", name: "battery" },
-              { label: "Efficiency (km/kWh)", name: "efficiency" },
-              { label: "Usable Battery (%)", name: "usable" },
-              { label: "Reserve (%)", name: "reserve" },
-              { label: "Current Charge (%)", name: "charge" },
+              { label: "Efficiency", name: "efficiency" },
+              { label: "Usable %", name: "usable" },
+              { label: "Reserve %", name: "reserve" },
+              { label: "Charge %", name: "charge" },
             ].map((item) => (
               <div key={item.name}>
-                <label className="text-sm text-gray-300">
-                  {item.label}
-                </label>
+                <label className="text-sm">{item.label}</label>
                 <input
                   name={item.name}
                   value={form[item.name]}
                   onChange={handleChange}
-                  className="w-full mt-1 p-2 rounded-md bg-black/30 border border-gray-600 focus:outline-none focus:ring-2 focus:bg-blue-500"
+                  className="w-full p-2 mt-1 rounded bg-black/30 border"
                 />
               </div>
             ))}
           </div>
-
-          {/* Battery Indicator */}
-          <div className="mt-6">
-            <p className="text-sm text-gray-300 mb-1">
-              Battery Level
-            </p>
-            <div className="w-full bg-gray-700 rounded-full h-3">
-              <div
-                className="bg-blue-400 h-3 rounded-full"
-                style={{ width: `${form.charge}%` }}
-              ></div>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="text-center text-gray-400 text-sm pb-6">
-        Built with ⚡ for smarter EV travel
-      </div>
+      {/* 🗺️ MAP SECTION */}
+      {showMap && (
+        <div className="px-10 pb-10">
+          <MapComponent
+            start={form.start}
+            destination={form.destination}
+            setDistance={setDistance}
+          />
+        </div>
+      )}
+
+      {/* 📊 RESULT SECTION */}
+      {distance > 0 && (
+        <div className="px-10 pb-10">
+          <div className="bg-white/10 p-6 rounded-xl max-w-lg">
+            <h3 className="text-lg font-semibold mb-2">Route Info</h3>
+            <p>📍 Distance: {distance.toFixed(2)} km</p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

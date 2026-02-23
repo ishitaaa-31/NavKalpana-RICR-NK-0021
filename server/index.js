@@ -20,7 +20,7 @@ app.use(cookieParser());
 app.use(morgan("dev"));
 
 app.use("/api/auth", authRoutes);
-
+app.use("/api", evRoutes);
 app.get("/", (req, res) => {
   console.log("Server is working");
 });

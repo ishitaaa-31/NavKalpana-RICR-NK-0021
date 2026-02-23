@@ -19,6 +19,7 @@ const LandingPage = () => {
 
   const [routePolyline, setRoutePolyline] = useState(null);
   const [stations, setStations] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -29,6 +30,7 @@ const LandingPage = () => {
     setStations([]);
     setDistance(0);
     setShowMap(true);
+    setLoading(true);
   };
 
   // ✅ ONLY store route info here
@@ -55,7 +57,7 @@ const LandingPage = () => {
           destination: form.destination,
           distance,
           duration,
-
+         routePolyline,
           batteryCapacity: Number(form.battery),
           efficiency: Number(form.efficiency),
           usablePercentage: Number(form.usable),
@@ -71,6 +73,9 @@ const LandingPage = () => {
       setTripData(data);
     } catch (error) {
       console.error("Trip planning failed", error);
+      
+    }finally{
+      setLoading(false);
     }
   };
 
@@ -141,22 +146,37 @@ const LandingPage = () => {
           </div>
         </div>
       </div>
+      {loading && (
+  <div className="fixed inset-0 bg-black/80 flex flex-col items-center justify-center z-50">
+    
+    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 mb-4"></div>
+
+    <h2 className="text-xl font-semibold">
+      ⚡ Planning your EV journey...
+    </h2>
+
+    <p className="text-gray-400 mt-2">
+      Finding routes, stations & optimizing battery 🔋
+    </p>
+  </div>
+)}
 
       {/* MAP */}
-      {showMap && (
+      {showMap&&(
         <div className="px-10 pb-10">
           <MapComponent
             start={form.start}
             destination={form.destination}
             onRouteReady={handleRouteReady}
             onStationsReady={setStations}
+             tripData={tripData} 
           />
         </div>
       )}
 
       {/* ROUTE INFO */}
       {distance > 0 && (
-        <div className="px-10 pb-10">
+        <div className="px-10 pb-10 flex justify-center">
           <div className="bg-white/10 p-6 rounded-xl max-w-lg">
             <h3 className="text-lg font-semibold mb-2">Route Info</h3>
             <p>📍 Distance: {distance.toFixed(2)} km</p>
@@ -166,19 +186,71 @@ const LandingPage = () => {
 
       {/* RESULT */}
       {tripData && (
-        <div className="px-10 pb-10">
-          <div className="bg-white/10 p-6 rounded-xl max-w-lg space-y-3">
-            <h3 className="text-lg font-semibold mb-2">🔋 Trip Analysis</h3>
+  <div className="px-6 pb-10 flex justify-center">
+    <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 
+                    p-[1px] rounded-2xl shadow-xl max-w-xl w-full">
 
-            <p>⚡ Total Energy Required: {tripData.totalEnergyRequired} kWh</p>
-            <p>🔌 Charging Stops Required: {tripData.totalStops}</p>
-            <p>⏱️ Total Charging Time: {tripData.totalChargingTimeHours} hrs</p>
-            <p>📏 Safe Range: {tripData.safeRange} km</p>
-            <p>🔋 Final Battery SoC: {tripData.finalSoC}%</p>
-            <p>💰 Estimated Charging Cost: ₹{tripData.totalCost}</p>
+      <div className="bg-gray-900 rounded-2xl p-6 text-white">
+        <h3 className="text-2xl font-bold mb-5 text-center tracking-wide">
+          ⚡ Trip Analysis
+        </h3>
+
+        <div className="grid grid-cols-2 gap-4">
+
+          <div className="bg-white/10 p-4 rounded-xl hover:scale-105 transition">
+            <p className="text-sm opacity-70">Energy Required</p>
+            <p className="text-xl font-semibold">⚡ {tripData.totalEnergyRequired} kWh</p>
           </div>
+
+          <div className="bg-white/10 p-4 rounded-xl hover:scale-105 transition">
+            <p className="text-sm opacity-70">Charging Stops</p>
+            <p className="text-xl font-semibold">🔌 {tripData.totalStops}</p>
+          </div>
+
+          <div className="bg-white/10 p-4 rounded-xl hover:scale-105 transition">
+            <p className="text-sm opacity-70">Charging Time</p>
+            <p className="text-xl font-semibold">⏱️ {tripData.totalChargingTimeHours} hrs</p>
+          </div>
+
+          <div className="bg-white/10 p-4 rounded-xl hover:scale-105 transition">
+            <p className="text-sm opacity-70">Safe Range</p>
+            <p className="text-xl font-semibold">📏 {tripData.safeRange} km</p>
+          </div>
+
+          <div className="bg-white/10 p-4 rounded-xl hover:scale-105 transition">
+            <p className="text-sm opacity-70">Final Battery</p>
+            <p className="text-xl font-semibold">🔋 {tripData.finalSoC}%</p>
+          </div>
+
+          <div className="bg-white/10 p-4 rounded-xl hover:scale-105 transition">
+            <p className="text-sm opacity-70">Estimated Cost</p>
+            <p className="text-xl font-semibold text-green-400">
+              💰 ₹{tripData.totalCost}
+            </p>
+          </div>
+
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
+{stations && stations.length > 0 && (
+  <div className="px-10 mt-6">
+    <h3 className="text-lg font-semibold mb-3">⚡ Filtered Stations</h3>
+
+    <ul className="space-y-2">
+      {stations
+        .filter((station) => station.distance <= 10) // example condition
+        .map((station, index) => (
+          <li key={index} className="bg-white/10 p-3 rounded-md">
+            🔌 {station.name}
+          </li>
+        ))}
+    </ul>
+  </div>
+)}
+
+
     </div>
   );
 };

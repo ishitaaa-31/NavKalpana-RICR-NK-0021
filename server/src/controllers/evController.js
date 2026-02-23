@@ -1,21 +1,101 @@
 import axios from "axios";
 import Route from "../models/routeModel.js";
-import ChargingStation from "../models/chargingStationModel.js";
 
+/* ---------------- DISTANCE FUNCTION ---------------- */
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
+/* ---------------- FIND ALL BATTERY ENDPOINTS ---------------- */
+const findAllBatteryEndpoints = (route, firstRange, fullRange) => {
+  let currentIndex = 0;
+  let endpoints = [];
+  let isFirst = true;
+
+  while (currentIndex < route.length - 1) {
+    let distanceCovered = 0;
+    let maxRange = isFirst ? firstRange : fullRange;
+    let found = false;
+
+    for (let i = currentIndex + 1; i < route.length; i++) {
+      const [lat1, lng1] = route[i - 1];
+      const [lat2, lng2] = route[i];
+
+      const segmentDist = getDistance(lat1, lng1, lat2, lng2);
+      distanceCovered += segmentDist;
+
+      if (distanceCovered >= maxRange) {
+        endpoints.push({
+          point: route[i],
+          index: i,
+          distanceCovered,
+        });
+
+        currentIndex = i;
+        isFirst = false; // 🔥 after first stop
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) break;
+  }
+
+  return endpoints;
+};
+
+  
+
+/* ---------------- FIND NEAREST STATION ---------------- */
+const findNearestStation = (point, stations) => {
+  let minDist = Infinity;
+  let nearest = null;
+
+  stations.forEach((station) => {
+    const dist = getDistance(
+      point[0],
+      point[1],
+      station.lat,
+      station.lng
+    );
+
+    if (dist < minDist) {
+      minDist = dist;
+      nearest = station;
+    }
+  });
+
+  return nearest;
+};
+
+/* ---------------- EV STATIONS API ---------------- */
 export const getEVStations = async (req, res) => {
   try {
     const { lat, lng } = req.query;
 
-    const response = await axios.get("https://api.openchargemap.io/v3/poi/", {
-      params: {
-        output: "json",
-        latitude: lat,
-        longitude: lng,
-        distance: 200,
-        maxresults: 100,
-        key: process.env.OPENCHARGE_API_KEY,
-      },
-    });
+    const response = await axios.get(
+      "https://api.openchargemap.io/v3/poi/",
+      {
+        params: {
+          output: "json",
+          latitude: lat,
+          longitude: lng,
+          distance: 200,
+          maxresults: 100,
+          key: process.env.OPENCHARGE_API_KEY,
+        },
+      }
+    );
 
     const stations = response.data.map((item) => ({
       name: item.AddressInfo?.Title,
@@ -30,6 +110,7 @@ export const getEVStations = async (req, res) => {
   }
 };
 
+/* ---------------- MAIN TRIP PLANNER ---------------- */
 export const planEVTrip = async (req, res) => {
   try {
     const {
@@ -37,13 +118,14 @@ export const planEVTrip = async (req, res) => {
       destination,
       distance,
       duration,
-      electricityRate = 8,
+      routePolyline,
       batteryCapacity,
       efficiency,
       usablePercentage,
       reservePercentage,
-      currentCharge,
-      stations, // ✅ stations passed from frontend
+      stations,
+      currentCharge, 
+       electricityRate = 8,
     } = req.body;
 
     if (
@@ -52,101 +134,102 @@ export const planEVTrip = async (req, res) => {
       !distance ||
       !batteryCapacity ||
       !efficiency ||
-      !stations?.length
+      !stations?.length ||
+      !routePolyline?.length
     ) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
     /* ---------------- BASIC VALUES ---------------- */
-    const bc = Number(batteryCapacity);     // kWh
-    const eff = Number(efficiency);         // km/kWh
+    const bc = Number(batteryCapacity);
+    const eff = Number(efficiency);
     const usablePct = Number(usablePercentage);
     const reservePct = Number(reservePercentage);
-    const chargePct = Number(currentCharge);
-    const tripDistance = Number(distance);
 
-    /* ---------------- ENERGY CALCS ---------------- */
+    /* ---------------- RANGE CALC ---------------- */
     const usableEnergy = bc * (usablePct / 100);
     const reserveEnergy = bc * (reservePct / 100);
 
-    let currentEnergy = bc * (chargePct / 100);
-    let remainingDistance = tripDistance;
+   const currentEnergy = bc * (currentCharge / 100);
 
-    const totalEnergyRequired = tripDistance / eff;
-    const safeRange = usableEnergy * eff;
+const firstRange = (currentEnergy - reserveEnergy) * eff;
+const fullRange = (usableEnergy - reserveEnergy) * eff;
+const totalEnergyRequired = distance / eff;
+const totalCost = totalEnergyRequired * electricityRate;
 
-    let chargingStops = [];
-    let totalChargingTime = 0;
-    let stationIndex = 0;
+    /* ---------------- STEP 1: FIND ENDPOINTS ---------------- */
+    const endpoints = findAllBatteryEndpoints(
+  routePolyline,
+  firstRange,
+  fullRange
+);
+    console.log("Battery Endpoints:", endpoints);
 
-    /* ---------------- CHARGING LOGIC ---------------- */
-    while (remainingDistance > (currentEnergy - reserveEnergy) * eff) {
-      const maxDrivable = (currentEnergy - reserveEnergy) * eff;
+    /* ---------------- STEP 2: MAP TO STATIONS ---------------- */
+    const recommendedStops = endpoints.map((ep) => {
+      const station = findNearestStation(ep.point, stations);
 
-      if (maxDrivable <= 0) break;
-
-      // Drive till battery hits reserve
-      remainingDistance -= maxDrivable;
-      currentEnergy = reserveEnergy;
-
-      // Pick next station (rotate to avoid repetition)
-      const station = stations[stationIndex % stations.length];
-      stationIndex++;
-
-      const arrivalSoC = (currentEnergy / bc) * 100;
-
-      const targetSoC = 80;
-      const targetEnergy = bc * (targetSoC / 100);
-
-      // Prevent negative charging
-      const energyAdded = Math.max(0, targetEnergy - currentEnergy);
-
-      const stationPower = station.powerOutput || 50;
-      const chargingTime = energyAdded / stationPower;
-
-      currentEnergy += energyAdded;
-      totalChargingTime += chargingTime;
-
-      chargingStops.push({
-        stationName: station.name,
-        arrivalSoC: arrivalSoC.toFixed(2),
-        energyAdded: energyAdded.toFixed(2),
-        chargingTimeHours: chargingTime.toFixed(2),
-      });
-    }
-
-    /* ---------------- FINAL LEG ---------------- */
-    const finalEnergyUsed = remainingDistance / eff;
-    currentEnergy -= finalEnergyUsed;
-
-    const finalSoC = (currentEnergy / bc) * 100;
-    const totalCost = totalEnergyRequired * electricityRate;
+      return {
+        stopLocation: ep.point,
+        stationName: station?.name,
+        lat: station?.lat,
+        lng: station?.lng,
+        distanceCovered: ep.distanceCovered.toFixed(2),
+      };
+    });
 
     /* ---------------- SAVE ROUTE ---------------- */
     const savedRoute = await Route.create({
       startLocation,
       destination,
-      distance: tripDistance,
+      distance,
       duration,
-      batteryUsed: totalEnergyRequired,
-      chargingStops: chargingStops.length,
+      chargingStops: recommendedStops.length,
     });
 
     /* ---------------- RESPONSE ---------------- */
     res.status(200).json({
       routeId: savedRoute._id,
-      distance: tripDistance.toFixed(2),
-      duration,
-      totalEnergyRequired: totalEnergyRequired.toFixed(2),
-      safeRange: safeRange.toFixed(2),
-      finalSoC: finalSoC.toFixed(2),
-      chargingStops,
-      totalStops: chargingStops.length,
-      totalChargingTimeHours: totalChargingTime.toFixed(2),
-      totalCost: totalCost.toFixed(2),
+      totalStops: recommendedStops.length,
+      recommendedStops,
+      maxRange: fullRange.toFixed(2),
+      totalEnergyRequired: totalEnergyRequired.toFixed(2), // ✅ ADD
+  totalCost: totalCost.toFixed(2),
     });
+
   } catch (error) {
     console.error("EV Trip Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+export const getCoordinates = async (req, res) => {
+  try {
+    const { place } = req.query;
+
+    const response = await axios.get(
+      "https://nominatim.openstreetmap.org/search",
+      {
+        params: {
+          format: "json",
+          q: `${place},India`,
+          limit: 1,
+        },
+        headers: {
+          "User-Agent": "ev-planner-app", // IMPORTANT
+        },
+      }
+    );
+
+    if (!response.data.length) {
+      return res.status(404).json({ message: "Location not found" });
+    }
+
+    res.json({
+      lat: parseFloat(response.data[0].lat),
+      lng: parseFloat(response.data[0].lon),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Geocoding error" });
   }
 };

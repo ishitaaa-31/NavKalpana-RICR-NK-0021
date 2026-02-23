@@ -7,6 +7,7 @@ import {
   Marker,
   Popup,
   Polyline,
+  
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -15,6 +16,7 @@ const MapComponent = ({
   destination,
   onRouteReady,
   onStationsReady,
+  tripData,
 }) => {
   const [route, setRoute] = useState([]);
   const [startPos, setStartPos] = useState(null);
@@ -79,13 +81,13 @@ const MapComponent = ({
 
   /* ---------------- Nominatim ---------------- */
   const getCoordinates = async (place) => {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${place},India&limit=1`
-    );
-    const data = await res.json();
-    if (!data.length) return null;
-    return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-  };
+  const res = await fetch(
+    `http://127.0.0.1:4500/api/geocode?place=${place}`
+  );
+
+  const data = await res.json();
+  return [data.lat, data.lng];
+};
 
   /* ---------------- Fetch Route ---------------- */
   useEffect(() => {
@@ -131,33 +133,51 @@ const MapComponent = ({
   }, [start, destination]);
 
   /* ---------------- Fetch EV Stations ---------------- */
-  useEffect(() => {
-    if (!route.length || hasSentStations.current) return;
+  /* ---------------- Fetch EV Stations (FULL ROUTE) ---------------- */
+useEffect(() => {
+  if (!route.length || hasSentStations.current) return;
 
-    const fetchStations = async () => {
+  const fetchStationsAlongRoute = async () => {
+    let allStations = [];
+
+    for (let i = 0; i < route.length; i += 100) {
+      const [lat, lng] = route[i];
+
       try {
-        const mid = route[Math.floor(route.length / 2)];
-        const [lat, lng] = mid;
-
         const res = await fetch(
           `http://127.0.0.1:4500/api/ev-stations?lat=${lat}&lng=${lng}`
         );
+
         const data = await res.json();
-
-        const filtered = computeStationsOnRoute(data, route);
-        setFilteredStations(filtered);
-
-        // ✅ send exactly ONCE
-        onStationsReady?.(filtered);
-        hasSentStations.current = true;
+        allStations = [...allStations, ...data];
       } catch (err) {
-        console.error("EV fetch error:", err);
+        console.error("Fetch error at point:", i, err);
       }
-    };
+    }
 
-    fetchStations();
-  }, [route]);
+    // remove duplicates
+    const uniqueStations = Array.from(
+      new Map(allStations.map(s => [`${s.lat}-${s.lng}`, s])).values()
+    );
 
+    return uniqueStations;
+  };
+
+  const fetchStations = async () => {
+    try {
+      const stations = await fetchStationsAlongRoute();
+
+      setFilteredStations(stations);
+      onStationsReady?.(stations);
+
+      hasSentStations.current = true;
+    } catch (err) {
+      console.error("EV fetch error:", err);
+    }
+  };
+
+  fetchStations();
+}, [route]);
   /* ---------------- Render ---------------- */
   return (
     <div className="rounded-xl overflow-hidden">
@@ -188,11 +208,11 @@ const MapComponent = ({
           <Polyline positions={route} pathOptions={{ color: "blue", weight: 5 }} />
         )}
 
-        {filteredStations.map((station, i) => (
-          <Marker key={i} position={[station.lat, station.lng]} icon={evIcon}>
-            <Popup>⚡ {station.name}</Popup>
-          </Marker>
-        ))}
+        {tripData?.recommendedStops?.map((stop, i) => (
+  <Marker key={i} position={[stop.lat, stop.lng]}>
+    <Popup>⭐ {stop.stationName}</Popup>
+  </Marker>
+))}
 
         <FitBounds route={route} />
       </MapContainer>

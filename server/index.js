@@ -10,6 +10,9 @@ import evRoutes from "./src/routes/evRouter.js"
 import authRoutes from "./src/routes/authRouter.js";
 import mongoose from "mongoose";
 
+import authRoutes from "./src/routes/authRouter.js";
+import mongoose from "mongoose";
+
 const app = express();
 app.use(cors({ origin: "http://localhost:5173", credentials:true}));
 app.use(express.json());
@@ -17,7 +20,6 @@ app.use(cookieParser());
 app.use(morgan("dev"));
 
 app.use("/api/auth", authRoutes);
-app.use("/api", evRoutes);
 
 app.get("/", (req, res) => {
   console.log("Server is working");

@@ -37,10 +37,10 @@ const LandingPage = () => {
       </div>
 
       {/* Main Section */}
-      <div className="flex flex-col md:flex-row items-center justify-between px-10 py-10 gap-10">
+      <div className="flex flex-col md:flex-row items-center  px-10 py-10 gap-72">
 
         {/* LEFT SIDE */}
-        <div className="max-w-lg space-y-6">
+        <div className="max-w-lg space-y-6 ms-32">
           <h2 className="text-4xl font-bold">
             Plan Smart EV Journeys 🚗⚡
           </h2>
@@ -73,7 +73,7 @@ const LandingPage = () => {
         </div>
 
         {/* RIGHT SIDE */}
-        <div className="w-full max-w-md bg-white/10 p-6 rounded-2xl">
+        <div className="w-full max-w-md bg-white/10 p-6 rounded-2xl me-40">
 
           <h3 className="text-lg font-semibold mb-4">
             🔋 Vehicle Stats

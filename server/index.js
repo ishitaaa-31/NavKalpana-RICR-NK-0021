@@ -8,9 +8,9 @@ import cookieParser from "cookie-parser";
 import evRoutes from "./src/routes/evRouter.js"
 
 import authRoutes from "./src/routes/authRouter.js";
-import mongoose from "mongoose";
 
-import authRoutes from "./src/routes/authRouter.js";
+
+
 import mongoose from "mongoose";
 
 const app = express();

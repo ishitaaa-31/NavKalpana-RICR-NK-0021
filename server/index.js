@@ -5,6 +5,10 @@ dotenv.config();
 import morgan from "morgan";
 import connectDB from "./src/config/db.js";
 import cookieParser from "cookie-parser";
+import evRoutes from "./src/routes/evRouter.js"
+
+import authRoutes from "./src/routes/authRouter.js";
+import mongoose from "mongoose";
 
 import authRoutes from "./src/routes/authRouter.js";
 import mongoose from "mongoose";

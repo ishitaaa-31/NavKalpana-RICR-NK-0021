@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import MapComponent from "../components/MapComponent.jsx";
+import { useRef } from "react";
 
 const LandingPage = () => {
   const [form, setForm] = useState({
@@ -20,6 +21,8 @@ const LandingPage = () => {
   const [routePolyline, setRoutePolyline] = useState(null);
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(false);
+  const hasSpokenRef = useRef(false);
+  
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -31,6 +34,7 @@ const LandingPage = () => {
     setDistance(0);
     setShowMap(true);
     setLoading(true);
+    hasSpokenRef.current = false;
   };
 
   // ✅ ONLY store route info here
@@ -41,11 +45,28 @@ const LandingPage = () => {
   };
 
   // ✅ BACKEND CALL — only when distance + stations are ready
+  // useEffect(() => {
+  //   if (distance > 0 && stations.length > 0) {
+  //     planTrip();
+  //   }
+  // }, [distance, stations]);
   useEffect(() => {
-    if (distance > 0 && stations.length > 0) {
-      planTrip();
-    }
-  }, [distance, stations]);
+  if (distance > 0 && routePolyline) {
+    planTrip();
+  }
+}, [distance, routePolyline]);
+
+useEffect(() => {
+  if (loading && !hasSpokenRef.current) {
+    speak("Planning your EV journey");
+    hasSpokenRef.current = true;
+  }
+
+  if (!loading && tripData) {
+    speak("Your trip has been planned successfully");
+    hasSpokenRef.current = false;
+  }
+}, [loading, tripData]);
 
   const planTrip = async () => {
     try {
@@ -78,6 +99,16 @@ const LandingPage = () => {
       setLoading(false);
     }
   };
+
+  const speak = (text) => {
+  const utterance = new SpeechSynthesisUtterance(text);
+
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  speechSynthesis.speak(utterance);
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 text-white">
@@ -168,7 +199,7 @@ const LandingPage = () => {
             start={form.start}
             destination={form.destination}
             onRouteReady={handleRouteReady}
-            onStationsReady={setStations}
+            //onStationsReady={setStations}
              tripData={tripData} 
           />
         </div>
@@ -234,22 +265,88 @@ const LandingPage = () => {
     </div>
   </div>
 )}
-{stations && stations.length > 0 && (
-  <div className="px-10 mt-6">
-    <h3 className="text-lg font-semibold mb-3">⚡ Filtered Stations</h3>
+{tripData?.recommendedStops?.length > 0 && (
+  <div className="px-10 pb-16">
+    <h3 className="text-3xl font-bold text-center mb-10 tracking-wide">
+      ⚡ Charging Stops Along Your Journey
+    </h3>
 
-    <ul className="space-y-2">
-      {stations
-        .filter((station) => station.distance <= 10) // example condition
-        .map((station, index) => (
-          <li key={index} className="bg-white/10 p-3 rounded-md">
-            🔌 {station.name}
-          </li>
-        ))}
-    </ul>
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {tripData.recommendedStops.map((stop, index) => (
+        <div
+          key={index}
+          className="relative group rounded-2xl p-[1px] 
+          bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 
+          hover:scale-105 transition duration-300 shadow-xl"
+        >
+          {/* INNER CARD */}
+          <div className="bg-gray-900 rounded-2xl p-5 h-full flex flex-col justify-between">
+
+            {/* TOP */}
+            <div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs uppercase tracking-wider text-gray-400">
+                  Stop #{index + 1}
+                </span>
+
+                <span className="text-xs bg-white/10 px-2 py-1 rounded-full">
+                  ⚡ Charging Point
+                </span>
+              </div>
+
+              <h4 className="text-lg font-semibold leading-snug">
+                🔌 {stop.stationName || "EV Charging Station"}
+              </h4>
+
+              <p className="text-sm text-gray-400 mt-2">
+                📍 {stop.lat?.toFixed(3)}, {stop.lng?.toFixed(3)}
+              </p>
+            </div>
+
+            {/* MIDDLE */}
+            <div className="mt-5 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Distance</span>
+                <span className="font-medium">
+                  🚗 {stop.cumulativeDistance} km
+                </span>
+              </div>
+
+              {/* Progress bar (visual touch) */}
+              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-green-400 to-blue-500"
+                  style={{
+                    width: `${Math.min(
+                      (stop.cumulativeDistance / tripData.totalDistance) * 100 || 20,
+                      100
+                    )}%`,
+                  }}
+                ></div>
+              </div>
+            </div>
+
+            {/* BOTTOM */}
+            <div className="mt-5 flex justify-between items-center">
+              <a
+                href={`https://www.google.com/maps?q=${stop.lat},${stop.lng}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm text-blue-400 hover:underline"
+              >
+                🧭 Navigate
+              </a>
+
+              <span className="text-xs text-gray-500">
+                Optimized Stop
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   </div>
 )}
-
 
     </div>
   );

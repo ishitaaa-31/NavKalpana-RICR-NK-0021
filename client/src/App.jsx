@@ -1,38 +1,30 @@
-import React from 'react'
-import Login from "./pages/Login";
-import Home from './pages/Home';
-import Register from "./pages/Register";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import LandingPage from './pages/Landingpage';
+import { Zap } from "lucide-react";
+
+import Navbar from "./components/Navbar";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import LandingPage from "./pages/Landingpage";
+
 const App = () => {
   return (
- <>
-      <BrowserRouter>
+    <BrowserRouter>
+      <div className="bg-[#070B14] min-h-screen text-white">
         <Toaster />
-        {/* <Header /> */}
+
+        <Navbar logoText="VoltPath" LogoIcon={Zap} loginRoute="/login" />
+
         <Routes>
           <Route path="/" element={<Home />} />
-          {/* <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} /> */}
           <Route path="/login" element={<Login />} />
-          <Route path="/landingPage" element={<LandingPage/>}/>
           <Route path="/register" element={<Register />} />
-          {/* <Route path="/user-dashboard" element={<UserDashboard />} />
-          <Route path="/rider-dashboard" element={<RiderDashboard />} />
-          <Route
-            path="/restaurant-dashboard"
-            element={<RestaurantDashboard />}
-          />
-          <Route path="/admin-dashboard" element={<AdminDashboard />} />
-          <Route path="/order-now" element={<OrderNow />} />
-     <Route path="/restaurantMenu" element={<RestaurantDisplayMenu />} />
-          <Route path="/checkout-page" element={<CheckoutPage />} />
-          <Route path="*" element={<NotFound />} /> */}
+          <Route path="/landingPage" element={<LandingPage />} />
         </Routes>
-      </BrowserRouter>
-    </>
-  )
-}
+      </div>
+    </BrowserRouter>
+  );
+};
 
-export default App
+export default App;

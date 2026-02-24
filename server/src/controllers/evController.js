@@ -109,7 +109,7 @@ const fetchStationsAtPoint = async (lat, lng) => {
       latitude: lat,
       longitude: lng,
       distance: 80,
-      maxresults: 20,
+      maxresults: 5,
       key: process.env.OPENCHARGE_API_KEY,
     },
   });
@@ -177,22 +177,28 @@ export const planEVTrip = async (req, res) => {
     const fullRange = Math.max(0, usableEnergyAfterCharge) * eff;
 
     /* ---------------- TRIP ENERGY / COST ---------------- */
-    const totalEnergyRequired = Number(distance) / eff; // kWh
+   const totalEnergyRequired = Number(distance) / eff; // kWh
     const totalCost = totalEnergyRequired * Number(electricityRate);
 
     /* ---------------- ENERGY DEFICIT (approx) ---------------- */
     // (kept similar to your earlier, not perfect but fine for estimate)
-    const usableInitialEnergy = Math.max(0, currentEnergy - reserveEnergy);
-    const energyDeficit = Math.max(0, totalEnergyRequired - usableInitialEnergy);
+    /* ---------------- FINAL ENERGY + SAFE RANGE (FIXED) ---------------- */
 
-    const chargingPower = 50; // kW (assumed)
-    const totalChargingTimeHours = energyDeficit / chargingPower;
+// 🔋 Total energy needed
+//const totalEnergyRequired = Number(distance) / eff;
 
-    const energyLeft = currentEnergy + energyDeficit - totalEnergyRequired;
-    const finalSoC = (energyLeft / bc) * 100;
+// 🔋 Energy available at start
+//const currentEnergy = bc * (currentChargePct / 100);
 
-    const safeEnergy = Math.max(0, energyLeft - reserveEnergy);
-    const safeRange = safeEnergy * eff;
+// 🔋 Final energy after completing trip
+/* ---------------- FINAL BATTERY AFTER LAST LEG ---------------- */
+
+// 🔋 Assume last charge also goes to 80%
+
+// 🔋 Charging time (simple estimate)
+const chargingPower = 50; // kW
+const energyDeficit = Math.max(0, totalEnergyRequired - currentEnergy);
+const totalChargingTimeHours = energyDeficit / chargingPower;
 
     /* ---------------- STEP 1: FIND ENDPOINTS (NOW EARLIER) ---------------- */
     const endpoints = findAllBatteryEndpoints(routePolyline, firstRange, fullRange);
@@ -220,6 +226,7 @@ export const planEVTrip = async (req, res) => {
         cumulativeDistance += ep.distanceCovered;
 
         const station = findNearestStation(ep.point, stations);
+       
         if (!station) return null;
 
         return {
@@ -231,6 +238,33 @@ export const planEVTrip = async (req, res) => {
         };
       })
       .filter(Boolean);
+
+      /* ---------------- FINAL BATTERY AFTER LAST LEG ---------------- */
+
+// 🔋 Assume last charge also goes to 80%
+const lastChargeEnergy = bc * 0.8;
+
+// 📏 Distance after last stop
+const lastStop = recommendedStops.length
+  ? Number(recommendedStops[recommendedStops.length - 1].cumulativeDistance)
+  : 0;
+
+const remainingDistance = Number(distance) - lastStop;
+
+// 🔋 Energy used after last charge
+const energyUsedAfterLastCharge = remainingDistance / eff;
+
+// 🔋 Final energy left
+const energyLeft = Math.max(0, lastChargeEnergy - energyUsedAfterLastCharge);
+
+// 🔋 Final SoC
+const finalSoC = (energyLeft / bc) * 100;
+
+// 🔋 Safe energy
+const safeEnergy = Math.max(0, energyLeft - reserveEnergy);
+
+// 🔋 Safe range
+const safeRange = safeEnergy * eff;
 
     /* ---------------- SAVE ROUTE ---------------- */
     const savedRoute = await Route.create({

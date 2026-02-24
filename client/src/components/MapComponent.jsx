@@ -86,51 +86,129 @@ const MapComponent = ({
   );
 
   const data = await res.json();
+   if (!data || data.lat == null || data.lng == null) {
+    return null; // ✅ prevent undefined crash
+  }
   return [data.lat, data.lng];
 };
 
   /* ---------------- Fetch Route ---------------- */
-  useEffect(() => {
-    if (!start || !destination) return;
+  // useEffect(() => {
+  //   if (!start || !destination) return;
 
-    // 🔁 RESET when route changes
-    setRoute([]);
-    setFilteredStations([]);
-    hasSentStations.current = false;
+  //   // 🔁 RESET when route changes
+  //   setRoute([]);
+  //   setFilteredStations([]);
+  //   hasSentStations.current = false;
 
-    const fetchRoute = async () => {
-      try {
-        const startLatLng = await getCoordinates(start);
-        const endLatLng = await getCoordinates(destination);
-        if (!startLatLng || !endLatLng) return;
+  //   const fetchRoute = async () => {
+  //     try {
+  //       const startLatLng = await getCoordinates(start);
+  //       const endLatLng = await getCoordinates(destination);
+  //       if (!startLatLng || !endLatLng) return;
 
-        setStartPos(startLatLng);
-        setEndPos(endLatLng);
+  //       setStartPos(startLatLng);
+  //       setEndPos(endLatLng);
 
-        const res = await fetch(
-          `https://router.project-osrm.org/route/v1/driving/${startLatLng[1]},${startLatLng[0]};${endLatLng[1]},${endLatLng[0]}?overview=full&geometries=geojson`
-        );
+  //       const res = await fetch(
+  //         `https://router.project-osrm.org/route/v1/driving/${startLatLng[1]},${startLatLng[0]};${endLatLng[1]},${endLatLng[0]}?overview=full&geometries=geojson`
+  //       );
 
-        const data = await res.json();
-        const formatted = data.routes[0].geometry.coordinates.map((c) => [
-          c[1],
-          c[0],
-        ]);
+  //       const data = await res.json();
+  //       const formatted = data.routes[0].geometry.coordinates.map((c) => [
+  //         c[1],
+  //         c[0],
+  //       ]);
 
-        setRoute(formatted);
+  //       setRoute(formatted);
 
-        onRouteReady?.({
-          distance: data.routes[0].distance / 1000,
-          duration: data.routes[0].duration / 60,
-          polyline: formatted,
-        });
-      } catch (err) {
-        console.error("Route error:", err);
+  //       onRouteReady?.({
+  //         distance: data.routes[0].distance / 1000,
+  //         duration: data.routes[0].duration / 60,
+  //         polyline: formatted,
+  //       });
+  //     } catch (err) {
+  //       console.error("Route error:", err);
+  //     }
+  //   };
+
+  //   fetchRoute();
+  // }, [start, destination]);
+
+useEffect(() => {
+  if (!start || !destination) return;
+
+  let isActive = true; // ✅ prevents stale updates
+
+  // 🔁 RESET safely
+  setRoute([]);
+  setFilteredStations([]);
+  setStartPos(null);   // ✅ IMPORTANT
+  setEndPos(null);     // ✅ IMPORTANT
+  hasSentStations.current = false;
+
+  const fetchRoute = async () => {
+    try {
+      const startLatLng = await getCoordinates(start);
+      const endLatLng = await getCoordinates(destination);
+
+      // 🛑 STOP if component updated
+      if (!isActive) return;
+
+      // 🛑 Validate coords
+      if (
+        !startLatLng ||
+        !endLatLng ||
+        startLatLng.includes(undefined) ||
+        endLatLng.includes(undefined)
+      ) {
+        console.log("❌ Invalid coordinates");
+        return;
       }
-    };
 
-    fetchRoute();
-  }, [start, destination]);
+      setStartPos(startLatLng);
+      setEndPos(endLatLng);
+
+      const res = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${startLatLng[1]},${startLatLng[0]};${endLatLng[1]},${endLatLng[0]}?overview=full&geometries=geojson`
+      );
+
+      const data = await res.json();
+
+      if (!isActive) return;
+
+      if (!data.routes || !data.routes.length) return;
+
+      const formatted = data.routes[0].geometry.coordinates.map((c) => [
+        c[1],
+        c[0],
+      ]);
+
+      // 🛑 FINAL VALIDATION
+      if (!formatted.length) return;
+
+      setRoute(formatted);
+
+      onRouteReady?.({
+        distance: data.routes[0].distance / 1000,
+        duration: data.routes[0].duration / 60,
+        polyline: formatted,
+      });
+
+    } catch (err) {
+      console.error("Route error:", err);
+    }
+  };
+
+  fetchRoute();
+
+  // ✅ CLEANUP (MOST IMPORTANT)
+  return () => {
+    isActive = false;
+  };
+}, [start, destination]);
+
+
 
   /* ---------------- Fetch EV Stations ---------------- */
   /* ---------------- Fetch EV Stations (FULL ROUTE) ---------------- */
@@ -208,11 +286,21 @@ const MapComponent = ({
           <Polyline positions={route} pathOptions={{ color: "blue", weight: 5 }} />
         )}
 
-        {tripData?.recommendedStops?.map((stop, i) => (
+        {/* {tripData?.recommendedStops?.map((stop, i) => (
   <Marker key={i} position={[stop.lat, stop.lng]}>
     <Popup>⭐ {stop.stationName}</Popup>
   </Marker>
-))}
+))} */}
+
+{tripData?.recommendedStops?.map((stop, i) => {
+  if (!stop.lat || !stop.lng) return null;
+
+  return (
+    <Marker key={i} position={[stop.lat, stop.lng]}>
+      <Popup>⭐ {stop.stationName}</Popup>
+    </Marker>
+  );
+})}
 
         <FitBounds route={route} />
       </MapContainer>

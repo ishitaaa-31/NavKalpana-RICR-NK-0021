@@ -35,7 +35,9 @@ const LandingPage = () => {
     setDistance(0);
     setShowMap(true);
     setLoading(true);
+     
     hasSpokenRef.current = false;
+    
   };
 
   // ✅ ONLY store route info here
@@ -45,6 +47,9 @@ const LandingPage = () => {
     setRoutePolyline(polyline);
   };
 
+
+
+
   // ✅ BACKEND CALL — only when distance + stations are ready
   // useEffect(() => {
   //   if (distance > 0 && stations.length > 0) {
@@ -52,10 +57,15 @@ const LandingPage = () => {
   //   }
   // }, [distance, stations]);
   useEffect(() => {
-    if (distance > 0 && routePolyline) {
+    if (distance > 0 && routePolyline&&loading) {
       planTrip();
+      
     }
   }, [distance, routePolyline]);
+
+
+
+
 
   useEffect(() => {
     if (loading && !hasSpokenRef.current) {
@@ -134,7 +144,7 @@ const LandingPage = () => {
     } catch (error) {
       console.error("Trip planning failed", error);
     } finally {
-      setLoading(false);
+       setLoading(false);
     }
   };
 
@@ -233,6 +243,7 @@ const LandingPage = () => {
       {showMap && (
         <div className="px-10 pb-10">
           <MapComponent
+           
             start={form.start}
             destination={form.destination}
             onRouteReady={handleRouteReady}

@@ -15,7 +15,7 @@ const MapComponent = ({
   start,
   destination,
   onRouteReady,
-  onStationsReady,
+  //onStationsReady,
   tripData,
 }) => {
   const [route, setRoute] = useState([]);
@@ -134,50 +134,50 @@ const MapComponent = ({
 
   /* ---------------- Fetch EV Stations ---------------- */
   /* ---------------- Fetch EV Stations (FULL ROUTE) ---------------- */
-useEffect(() => {
-  if (!route.length || hasSentStations.current) return;
+// useEffect(() => {
+//   if (!route.length || hasSentStations.current) return;
 
-  const fetchStationsAlongRoute = async () => {
-    let allStations = [];
+//   const fetchStationsAlongRoute = async () => {
+//     let allStations = [];
 
-    for (let i = 0; i < route.length; i += 100) {
-      const [lat, lng] = route[i];
+//     for (let i = 0; i < route.length; i += 100) {
+//       const [lat, lng] = route[i];
 
-      try {
-        const res = await fetch(
-          `http://127.0.0.1:4500/api/ev-stations?lat=${lat}&lng=${lng}`
-        );
+//       try {
+//         const res = await fetch(
+//           `http://127.0.0.1:4500/api/ev-stations?lat=${lat}&lng=${lng}`
+//         );
 
-        const data = await res.json();
-        allStations = [...allStations, ...data];
-      } catch (err) {
-        console.error("Fetch error at point:", i, err);
-      }
-    }
+//         const data = await res.json();
+//         allStations = [...allStations, ...data];
+//       } catch (err) {
+//         console.error("Fetch error at point:", i, err);
+//       }
+//     }
 
-    // remove duplicates
-    const uniqueStations = Array.from(
-      new Map(allStations.map(s => [`${s.lat}-${s.lng}`, s])).values()
-    );
+//     // remove duplicates
+//     const uniqueStations = Array.from(
+//       new Map(allStations.map(s => [`${s.lat}-${s.lng}`, s])).values()
+//     );
 
-    return uniqueStations;
-  };
+//     return uniqueStations;
+//   };
 
-  const fetchStations = async () => {
-    try {
-      const stations = await fetchStationsAlongRoute();
+//   const fetchStations = async () => {
+//     try {
+//       const stations = await fetchStationsAlongRoute();
 
-      setFilteredStations(stations);
-      onStationsReady?.(stations);
+//       setFilteredStations(stations);
+//       onStationsReady?.(stations);
 
-      hasSentStations.current = true;
-    } catch (err) {
-      console.error("EV fetch error:", err);
-    }
-  };
+//       hasSentStations.current = true;
+//     } catch (err) {
+//       console.error("EV fetch error:", err);
+//     }
+//   };
 
-  fetchStations();
-}, [route]);
+//   fetchStations();
+// }, [route]);
   /* ---------------- Render ---------------- */
   return (
     <div className="rounded-xl overflow-hidden">

@@ -111,6 +111,35 @@ export const getEVStations = async (req, res) => {
 };
 
 /* ---------------- MAIN TRIP PLANNER ---------------- */
+
+const fetchStationsAtPoint = async (lat, lng) => {
+  const response = await axios.get(
+    "https://api.openchargemap.io/v3/poi/",
+    {
+      params: {
+        output: "json",
+        latitude: lat,
+        longitude: lng,
+        distance: 80,
+        maxresults: 20,
+        key: process.env.OPENCHARGE_API_KEY,
+      },
+    }
+  );
+
+  return response.data.map((item) => ({
+    name: item.AddressInfo?.Title,
+    lat: item.AddressInfo?.Latitude,
+    lng: item.AddressInfo?.Longitude,
+  }));
+};
+
+
+
+
+
+
+
 export const planEVTrip = async (req, res) => {
   try {
     const {
@@ -123,7 +152,7 @@ export const planEVTrip = async (req, res) => {
       efficiency,
       usablePercentage,
       reservePercentage,
-      stations,
+      //stations,
       currentCharge, 
        electricityRate = 8,
     } = req.body;
@@ -134,7 +163,7 @@ export const planEVTrip = async (req, res) => {
       !distance ||
       !batteryCapacity ||
       !efficiency ||
-      !stations?.length ||
+      //!stations?.length ||
       !routePolyline?.length
     ) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -147,14 +176,65 @@ export const planEVTrip = async (req, res) => {
     const reservePct = Number(reservePercentage);
 
     /* ---------------- RANGE CALC ---------------- */
-    const usableEnergy = bc * (usablePct / 100);
-    const reserveEnergy = bc * (reservePct / 100);
+   /* ---------------- RANGE CALC ---------------- */
+const reserveEnergy = bc * (reservePct / 100);
 
-   const currentEnergy = bc * (currentCharge / 100);
+// 🔋 Current battery (first stretch)
+const currentEnergy = bc * (currentCharge / 100);
+const firstUsableEnergy = currentEnergy - reserveEnergy;
+const firstRange = firstUsableEnergy * eff;
 
-const firstRange = (currentEnergy - reserveEnergy) * eff;
-const fullRange = (usableEnergy - reserveEnergy) * eff;
+// 🔋 Full battery (after charging, but keeping reserve)
+const usableEnergy = bc - reserveEnergy;
+const fullRange = usableEnergy * eff;
 const totalEnergyRequired = distance / eff;
+
+
+
+/* ---------------- ENERGY CALCULATIONS ---------------- */
+
+// 🔋 Initial energy
+const initialEnergy = bc * (currentCharge / 100);
+
+// 🔋 Reserve energy (already calculated above)
+//const reserveEnergy = bc * (reservePct / 100);
+
+// 🔋 Usable initial energy
+const usableInitialEnergy = Math.max(0, initialEnergy - reserveEnergy);
+
+// ⚡ Total energy needed for trip
+//const totalEnergyRequired = distance / eff;
+
+// ⚡ Energy deficit (how much we need to charge)
+const energyDeficit = Math.max(0, totalEnergyRequired - usableInitialEnergy);
+
+// 🔌 Assume charging power (kW)
+const chargingPower = 50; // you can change later
+
+// ⏱️ Total charging time
+const totalChargingTimeHours = energyDeficit / chargingPower;
+
+// 🔋 Energy left after trip
+const energyLeft = initialEnergy + energyDeficit - totalEnergyRequired;
+
+// 🔋 Final battery %
+const finalSoC = (energyLeft / bc) * 100;
+
+// 📏 Safe range (after keeping reserve)
+const safeEnergy = Math.max(0, energyLeft - reserveEnergy);
+const safeRange = safeEnergy * eff;
+
+
+
+
+
+
+
+
+
+
+
+
 const totalCost = totalEnergyRequired * electricityRate;
 
     /* ---------------- STEP 1: FIND ENDPOINTS ---------------- */
@@ -163,20 +243,50 @@ const totalCost = totalEnergyRequired * electricityRate;
   firstRange,
   fullRange
 );
+
+let stations = [];
+
+for (const ep of endpoints) {
+  const [lat, lng] = ep.point;
+
+  try {
+    const nearbyStations = await fetchStationsAtPoint(lat, lng);
+    stations.push(...nearbyStations);
+  } catch (err) {
+    console.error("Station fetch error:", err);
+  }
+}
+
+// remove duplicates
+stations = Array.from(
+  new Map(stations.map(s => [`${s.lat}-${s.lng}`, s])).values()
+);
+
+
+
+
     console.log("Battery Endpoints:", endpoints);
 
     /* ---------------- STEP 2: MAP TO STATIONS ---------------- */
-    const recommendedStops = endpoints.map((ep) => {
-      const station = findNearestStation(ep.point, stations);
+    let cumulativeDistance = 0;
 
-      return {
-        stopLocation: ep.point,
-        stationName: station?.name,
-        lat: station?.lat,
-        lng: station?.lng,
-        distanceCovered: ep.distanceCovered.toFixed(2),
-      };
-    });
+const recommendedStops = endpoints.map((ep) => {
+  cumulativeDistance += ep.distanceCovered;
+
+  const station = findNearestStation(ep.point, stations);
+
+  if (!station) return null;
+
+  return {
+    stopLocation: ep.point,
+    stationName: station.name,
+    lat: station.lat,
+    lng: station.lng,
+
+    // ✅ cumulative distance
+    cumulativeDistance: cumulativeDistance.toFixed(2),
+  };
+}).filter(Boolean);
 
     /* ---------------- SAVE ROUTE ---------------- */
     const savedRoute = await Route.create({
@@ -195,6 +305,10 @@ const totalCost = totalEnergyRequired * electricityRate;
       maxRange: fullRange.toFixed(2),
       totalEnergyRequired: totalEnergyRequired.toFixed(2), // ✅ ADD
   totalCost: totalCost.toFixed(2),
+   totalChargingTimeHours: totalChargingTimeHours.toFixed(2),
+  finalSoC: finalSoC.toFixed(2),
+  safeRange: safeRange.toFixed(2),
+
     });
 
   } catch (error) {

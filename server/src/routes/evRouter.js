@@ -1,14 +1,25 @@
+// src/routes/evRouter.js
 import express from "express";
-import { getEVStations } from "../controllers/evController.js";
-import { planEVTrip , getSoCCurve } from "../controllers/evController.js";
-import { getCoordinates } from "../controllers/evController.js";
+import {
+  getEVStations,
+  planEVTrip,
+  getSoCCurve,
+  getCoordinates,
+} from "../controllers/evController.js";
+
+import { advancedPlanTrip } from "../controllers/advancedController.js";
 
 const router = express.Router();
 
+// debug / helpers
 router.get("/ev-stations", getEVStations);
-router.post("/plan-trip", planEVTrip);
-router.post("/soc-curve", getSoCCurve);
 router.get("/geocode", getCoordinates);
 
-export default router;
+// base planning
+router.post("/plan-trip", planEVTrip);
+router.post("/soc-curve", getSoCCurve);
 
+// ✅ advanced planning (Part 2)
+router.post("/advanced/plan-trip", advancedPlanTrip);
+
+export default router;

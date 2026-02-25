@@ -25,6 +25,11 @@ const LandingPage = () => {
 
   const hasSpokenRef = useRef(false);
   const hasPlannedRef = useRef(false);
+  const distanceRef = useRef(0);
+const routePolylineRef = useRef(null);
+const durationRef = useRef(0);
+const formRef = useRef(form);
+const tripSessionRef = useRef(0);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -36,14 +41,29 @@ const LandingPage = () => {
     setLoading(true);
      
     hasSpokenRef.current = false;
+    hasPlannedRef.current = false;        // line to add
+  distanceRef.current = 0;             // line to add
+  routePolylineRef.current = null;     // line to add
+  tripSessionRef.current += 1;         // line to add
+  setTripData(null);                   // line to add
+  setSocCurve([]);                     // line to add
+  setDistance(0);                      // line to add
+  setRoutePolyline(null);   
     
   };
 
   const handleRouteReady = ({ distance, duration, polyline }) => {
-    setDistance(distance);
-    setDuration(duration);
-    setRoutePolyline(polyline);
+     console.log("✅ handleRouteReady fired", { distance, polylineLength: polyline?.length });
+    distanceRef.current = distance;
+  durationRef.current = duration;
+  routePolylineRef.current = polyline;
+
+  
+  setDistance(distance);
+  setDuration(duration);
+  setRoutePolyline(polyline);
   };
+
 
 
 
@@ -54,19 +74,19 @@ const LandingPage = () => {
   //     planTrip();
   //   }
   // }, [distance, stations]);
-  useEffect(() => {
-    if (distance > 0 && routePolyline && !hasPlannedRef.current) {
-      hasPlannedRef.current = true;
-      planTrip();
+  // useEffect(() => {
+  //   if (distance > 0 && routePolyline && !hasPlannedRef.current) {
+  //     hasPlannedRef.current = true;
+  //     planTrip();
       
-    }
-  }, [distance, routePolyline,form]);
+  //   }
+  // }, [distance, routePolyline,form]);
 
 const timeoutRef = useRef(null);
 
 useEffect(() => {
   if (!distance || !routePolyline) return;
-
+console.log("📡 useEffect triggered", { distance, polylineLength: routePolyline?.length });
   clearTimeout(timeoutRef.current);
 
   timeoutRef.current = setTimeout(() => {
@@ -121,31 +141,53 @@ useEffect(() => {
     fetchSocCurve();
   }, [tripData]);
 
+
+useEffect(() => { formRef.current = form; }, [form]);
+
+
+
   const planTrip = async () => {
+    
+const session = tripSessionRef.current;
+  const f = formRef.current;
+  const dist = distanceRef.current;
+  const poly = routePolylineRef.current;
+  const dur = durationRef.current;
+
+
+  if (!dist || !poly || poly.length < 2) {
+    setLoading(false);
+    return;
+  }
+
     try {
       const response = await fetch("http://localhost:4500/api/ev/plan-trip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          startLocation: form.start,
-          destination: form.destination,
-          distance,
-          duration,
-          routePolyline,
-          batteryCapacity: Number(form.battery),
-          efficiency: Number(form.efficiency),
-          usablePercentage: Number(form.usable), // FIX: pass usable%
-          reservePercentage: Number(form.reserve),
-          currentCharge: Number(form.charge),
+          startLocation: f.start,
+          destination: f.destination,
+          distance:dist,
+          duration:dur,
+          routePolyline:poly,
+          batteryCapacity: Number(f.battery),
+          efficiency: Number(f.efficiency),
+          usablePercentage: Number(f.usable), // FIX: pass usable%
+          reservePercentage: Number(f.reserve),
+          currentCharge: Number(f.charge),
+          
           electricityRate: 8,
         }),
       });
+
+       if (session !== tripSessionRef.current) return;
+
       const data = await response.json();
       setTripData(data);
     } catch (error) {
       console.error("Trip planning failed", error);
     } finally {
-       setLoading(false);
+       if (session === tripSessionRef.current) setLoading(false);
     }
   };
 

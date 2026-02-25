@@ -8,6 +8,7 @@ import {
   Popup,
   Polyline,
   
+  
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -17,6 +18,7 @@ const MapComponent = ({
   onRouteReady,
   //onStationsReady,
   tripData,
+  form,
 }) => {
   const [route, setRoute] = useState([]);
   const [startPos, setStartPos] = useState(null);
@@ -206,7 +208,7 @@ useEffect(() => {
   return () => {
     isActive = false;
   };
-}, [start, destination]);
+}, [start, destination,form]);
 
 
 

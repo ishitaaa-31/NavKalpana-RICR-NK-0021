@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import LandingPage from "./pages/Landingpage";
+import AdvancedLandingPage from "./pages/AdvancedLandingPage";
 
 const App = () => {
   return (
@@ -21,6 +22,7 @@ const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/landingPage" element={<LandingPage />} />
+          <Route path="/advanced" element={<AdvancedLandingPage />} />
         </Routes>
       </div>
     </BrowserRouter>

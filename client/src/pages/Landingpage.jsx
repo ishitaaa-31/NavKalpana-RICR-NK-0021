@@ -29,15 +29,14 @@ const LandingPage = () => {
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = () => {
-    setTripData(null);
-    setSocCurve([]);
-    setSocReady(false);
-    setDistance(0);
-    setRoutePolyline(null);
+    // setTripData(null);
+    // setStations([]);
+    // setDistance(0);
     setShowMap(true);
     setLoading(true);
+     
     hasSpokenRef.current = false;
-    hasPlannedRef.current = false;
+    
   };
 
   const handleRouteReady = ({ distance, duration, polyline }) => {
@@ -46,13 +45,37 @@ const LandingPage = () => {
     setRoutePolyline(polyline);
   };
 
-  // Trigger planTrip only once when route is ready
+
+
+
+  // ✅ BACKEND CALL — only when distance + stations are ready
+  // useEffect(() => {
+  //   if (distance > 0 && stations.length > 0) {
+  //     planTrip();
+  //   }
+  // }, [distance, stations]);
   useEffect(() => {
     if (distance > 0 && routePolyline && !hasPlannedRef.current) {
       hasPlannedRef.current = true;
       planTrip();
+      
     }
-  }, [distance, routePolyline]);
+  }, [distance, routePolyline,form]);
+
+const timeoutRef = useRef(null);
+
+useEffect(() => {
+  if (!distance || !routePolyline) return;
+
+  clearTimeout(timeoutRef.current);
+
+  timeoutRef.current = setTimeout(() => {
+    planTrip();
+  }, 500); // 👈 delay
+
+}, [distance, routePolyline, form]);
+
+
 
   useEffect(() => {
     if (loading && !hasSpokenRef.current) {
@@ -122,7 +145,7 @@ const LandingPage = () => {
     } catch (error) {
       console.error("Trip planning failed", error);
     } finally {
-      setLoading(false);
+       setLoading(false);
     }
   };
 
@@ -210,10 +233,12 @@ const LandingPage = () => {
       {showMap && (
         <div className="px-10 pb-10">
           <MapComponent
+           
             start={form.start}
             destination={form.destination}
             onRouteReady={handleRouteReady}
             tripData={tripData}
+            form={form} 
           />
         </div>
       )}

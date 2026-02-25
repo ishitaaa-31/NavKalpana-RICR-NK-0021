@@ -47,21 +47,25 @@ export const getEVStations = async (req, res) => {
   }
 };
 
-/* ---------------- GEOCODE ---------------- */
-export const getCoordinates = async (req, res) => {
-  try {
-    const { place } = req.query;
-    const response = await axios.get("https://nominatim.openstreetmap.org/search", {
-      params: { format: "json", q: `${place},India`, limit: 1 },
-      headers: { "User-Agent": "ev-planner-app" },
-      timeout: 15000,
-    });
-    if (!response.data.length) return res.status(404).json({ message: "Location not found" });
-    res.json({ lat: parseFloat(response.data[0].lat), lng: parseFloat(response.data[0].lon) });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Geocoding error" });
-  }
+/* ---------------- MAIN TRIP PLANNER ---------------- */
+
+const fetchStationsAtPoint = async (lat, lng) => {
+  const response = await axios.get("https://api.openchargemap.io/v3/poi/", {
+    params: {
+      output: "json",
+      latitude: lat,
+      longitude: lng,
+      distance: 80,
+      maxresults: 5,
+      key: process.env.OPENCHARGE_API_KEY,
+    },
+  });
+
+  return response.data.map((item) => ({
+    name: item.AddressInfo?.Title,
+    lat: item.AddressInfo?.Latitude,
+    lng: item.AddressInfo?.Longitude,
+  }));
 };
 
 /* ---------------- MAIN TRIP PLANNER ---------------- */
@@ -173,24 +177,29 @@ export const planEVTrip = async (req, res) => {
 
     const usableRangeKm = () => Math.max(0, (currentEnergy - reserveEnergy) * eff);
 
-    while (currentRouteKm < tripKm && recommendedStops.length < 20) {
-      const remainingTripKm = tripKm - currentRouteKm;
+    /* ---------------- TRIP ENERGY / COST ---------------- */
+   const totalEnergyRequired = Number(distance) / eff; // kWh
+    const totalCost = totalEnergyRequired * Number(electricityRate);
 
-      // Can we make it without stopping?
-      if (usableRangeKm() >= remainingTripKm) {
-        console.log(`✅ Can reach destination from ${currentRouteKm.toFixed(1)}km, range=${usableRangeKm().toFixed(1)}km`);
-        break;
-      }
+    /* ---------------- ENERGY DEFICIT (approx) ---------------- */
+    // (kept similar to your earlier, not perfect but fine for estimate)
+    /* ---------------- FINAL ENERGY + SAFE RANGE (FIXED) ---------------- */
 
-      // Where to search: 70% of current usable range
-      const searchAtKm = currentRouteKm + usableRangeKm() * SEARCH_TRIGGER_RATIO;
+// 🔋 Total energy needed
+//const totalEnergyRequired = Number(distance) / eff;
 
-      let searchIndex = currentIndex;
-      while (searchIndex < cumKm.length - 1 && cumKm[searchIndex] < searchAtKm) searchIndex++;
-      if (searchIndex >= cumKm.length - 1) break;
+// 🔋 Energy available at start
+//const currentEnergy = bc * (currentChargePct / 100);
 
-      const [searchLat, searchLng] = poly[searchIndex];
-      console.log(`🔍 Searching stations at km=${searchAtKm.toFixed(1)}, lat=${searchLat.toFixed(3)}, lng=${searchLng.toFixed(3)}`);
+// 🔋 Final energy after completing trip
+/* ---------------- FINAL BATTERY AFTER LAST LEG ---------------- */
+
+// 🔋 Assume last charge also goes to 80%
+
+// 🔋 Charging time (simple estimate)
+const chargingPower = 50; // kW
+const energyDeficit = Math.max(0, totalEnergyRequired - currentEnergy);
+const totalChargingTimeHours = energyDeficit / chargingPower;
 
       const { stations: nearbyStations, real } = await fetchStationsWithExpand(searchLat, searchLng);
 
@@ -325,9 +334,9 @@ export const planEVTrip = async (req, res) => {
 
       simEnergy = Math.max(0, simEnergy - (driveKm + detourKm) / eff);
 
-      const needToCharge = Math.max(0, targetEnergy - simEnergy);
-      totalChargingTimeHours += needToCharge / chargingPower;
-      simEnergy += needToCharge;
+        const station = findNearestStation(ep.point, stations);
+       
+        if (!station) return null;
 
       lastKm = stop.cumulativeDistance;
     }
@@ -339,15 +348,34 @@ export const planEVTrip = async (req, res) => {
     const totalEnergyRequired = totalKmWithDetours / eff;
     const totalCost = totalEnergyRequired * electricityRate;
 
-    const finalSoC = Math.max(0, (simEnergy / effectiveBc) * 100);
-    const safeRange = Math.max(0, (simEnergy - reserveEnergy) * eff);
+      /* ---------------- FINAL BATTERY AFTER LAST LEG ---------------- */
 
-    console.log(`\n==== TRIP SUMMARY ====`);
-    console.log(`Stops: ${recommendedStops.length} | Charging: ${totalChargingTimeHours.toFixed(2)}hrs`);
-    console.log(`Final SoC: ${finalSoC.toFixed(2)}% | Safe range: ${safeRange.toFixed(2)}km`);
-    console.log(`======================\n`);
+// 🔋 Assume last charge also goes to 80%
+const lastChargeEnergy = bc * 0.8;
 
-    // ------- 5) Save + respond -------
+// 📏 Distance after last stop
+const lastStop = recommendedStops.length
+  ? Number(recommendedStops[recommendedStops.length - 1].cumulativeDistance)
+  : 0;
+
+const remainingDistance = Number(distance) - lastStop;
+
+// 🔋 Energy used after last charge
+const energyUsedAfterLastCharge = remainingDistance / eff;
+
+// 🔋 Final energy left
+const energyLeft = Math.max(0, lastChargeEnergy - energyUsedAfterLastCharge);
+
+// 🔋 Final SoC
+const finalSoC = (energyLeft / bc) * 100;
+
+// 🔋 Safe energy
+const safeEnergy = Math.max(0, energyLeft - reserveEnergy);
+
+// 🔋 Safe range
+const safeRange = safeEnergy * eff;
+
+    /* ---------------- SAVE ROUTE ---------------- */
     const savedRoute = await Route.create({
       startLocation, destination,
       distance: tripKm, duration,

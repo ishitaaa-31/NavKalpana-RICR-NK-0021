@@ -30,9 +30,9 @@ const LandingPage = () => {
   };
 
   const handleSubmit = () => {
-    setTripData(null);
-    setStations([]);
-    setDistance(0);
+    // setTripData(null);
+    // setStations([]);
+    // setDistance(0);
     setShowMap(true);
     setLoading(true);
      
@@ -57,13 +57,24 @@ const LandingPage = () => {
   //   }
   // }, [distance, stations]);
   useEffect(() => {
-    if (distance > 0 && routePolyline&&loading) {
+    if (distance > 0 && routePolyline) {
       planTrip();
       
     }
-  }, [distance, routePolyline]);
+  }, [distance, routePolyline,form]);
 
+const timeoutRef = useRef(null);
 
+useEffect(() => {
+  if (!distance || !routePolyline) return;
+
+  clearTimeout(timeoutRef.current);
+
+  timeoutRef.current = setTimeout(() => {
+    planTrip();
+  }, 500); // 👈 delay
+
+}, [distance, routePolyline, form]);
 
 
 
@@ -249,6 +260,7 @@ const LandingPage = () => {
             onRouteReady={handleRouteReady}
             //onStationsReady={setStations}
             tripData={tripData}
+            form={form} 
           />
         </div>
       )}

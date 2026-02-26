@@ -756,13 +756,7 @@ const AdvancedLandingPage = () => {
           <BarGraph payload={analyticsPayload} />
         </div>
       )}
-      {/* ── BAR GRAPH ── */}
-      {analyticsPayload && (
-        <div className="px-10 pb-20">
-          <BarGraph payload={analyticsPayload} />
-        </div>
-      )}
-
+     
       {/* ── ENERGY PIE CHART ── */}
       {analyticsPayload && (
         <div className="px-10 pb-20">

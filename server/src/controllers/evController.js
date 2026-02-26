@@ -171,22 +171,42 @@ export const planEVTripCore = async (payload) => {
   // ------- 2) OpenChargeMap fetch with cache + retry -------
   global.__OCP_CACHE__ = global.__OCP_CACHE__ || new Map();
 
+  // FIX: track last API call time to avoid rapid-fire requests → 429
+  global.__OCP_LAST_CALL__ = global.__OCP_LAST_CALL__ || 0;
+
+  // FIX: minimum gap between API calls = 300ms
+  const MIN_API_GAP_MS = 300;
+
   const cacheKey = (lat, lng, r, m) =>
     `${Math.round(lat * 10) / 10},${Math.round(lng * 10) / 10},r=${r},m=${m}`;
 
   const fetchStationsAtPoint = async (
     lat,
     lng,
-    { radiusKm = 40, maxresults = 60, retries = 3, cacheTtlMs = 3600000 } = {},
+    // FIX: increased retries from 3 → 5, longer base backoff
+    { radiusKm = 40, maxresults = 60, retries = 5, cacheTtlMs = 3600000 } = {},
   ) => {
     const key = cacheKey(lat, lng, radiusKm, maxresults);
     const now = Date.now();
     const cached = global.__OCP_CACHE__.get(key);
-    if (cached && now - cached.ts < cacheTtlMs) return cached.data;
+
+    // Return cached result if still fresh — saves API calls entirely
+    if (cached && now - cached.ts < cacheTtlMs) {
+      console.log(`[Cache HIT] ${key}`);
+      return cached.data;
+    }
+
+    // FIX: throttle — wait if we called too recently
+    const msSinceLast = Date.now() - global.__OCP_LAST_CALL__;
+    if (msSinceLast < MIN_API_GAP_MS) {
+      await sleep(MIN_API_GAP_MS - msSinceLast);
+    }
 
     let attempt = 0;
     while (attempt <= retries) {
       try {
+        global.__OCP_LAST_CALL__ = Date.now();
+
         const response = await axios.get(
           "https://api.openchargemap.io/v3/poi/",
           {
@@ -209,7 +229,6 @@ export const planEVTripCore = async (payload) => {
             lng: item.AddressInfo?.Longitude,
           }))
           .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
-          // Deterministic sort — API result order must never affect the trip plan
           .sort((a, b) => {
             const nc = a.name.localeCompare(b.name);
             if (nc !== 0) return nc;
@@ -217,14 +236,34 @@ export const planEVTripCore = async (payload) => {
             return a.lng - b.lng;
           });
 
-        global.__OCP_CACHE__.set(key, { ts: now, data });
+        global.__OCP_CACHE__.set(key, { ts: Date.now(), data });
         return data;
       } catch (err) {
         if (err?.response?.status === 429 && attempt < retries) {
-          await sleep(800 * Math.pow(2, attempt));
+          // FIX: longer backoff — 1500ms, 3000ms, 6000ms, 12000ms, 24000ms
+          const waitMs = 1500 * Math.pow(2, attempt);
+          console.warn(
+            `[429] Rate limited. Waiting ${waitMs}ms before retry ${attempt + 1}/${retries}...`,
+          );
+          await sleep(waitMs);
           attempt++;
         } else {
-          throw err;
+          // FIX: for non-429 errors (network, timeout), still retry with short delay
+          if (attempt < retries && !err?.response?.status) {
+            const waitMs = 1000 * (attempt + 1);
+            console.warn(
+              `[Network error] Retrying in ${waitMs}ms... (attempt ${attempt + 1})`,
+            );
+            await sleep(waitMs);
+            attempt++;
+          } else {
+            console.error(
+              `[fetchStationsAtPoint] Failed after ${attempt} attempts:`,
+              err.message,
+            );
+            // FIX: return empty array instead of throwing — trip planner will fall through to synthetic stop
+            return [];
+          }
         }
       }
     }
@@ -277,7 +316,6 @@ export const planEVTripCore = async (payload) => {
       if (currentEnergyVal - energyNeeded < reserveEnergy) continue;
 
       const energyAfterArrival = currentEnergyVal - energyNeeded;
-      // Prefer farthest reachable station → fewest total stops
       const score = -best.km + detourKm * 1.5;
 
       candidates.push({
@@ -314,10 +352,7 @@ export const planEVTripCore = async (payload) => {
   let currentIndex = 0;
   const recommendedStops = [];
   const visitedStationKeys = new Set();
-  const stationKey = (lat, lng) =>
-    `${Math.round(lat * 1000) / 1000},${Math.round(lng * 1000) / 1000}`;
 
-  // Tracks whether the last stop was already boosted to 100% for the gap strategy
   let lastStopAlreadyBoosted = false;
 
   const usableRangeKm = () =>
@@ -352,7 +387,7 @@ export const planEVTripCore = async (payload) => {
 
     let chosen = null;
 
-    // ── PASS 1: normal radius, station ≤25 km from route ──────────────────
+    // ── PASS 1: normal radius ──────────────────────────────────────────────
     if (!chosen) {
       for (const r of [25, 40, 60, 80, 120]) {
         const stations = await fetchStationsAtPoint(searchLat, searchLng, {
@@ -376,7 +411,7 @@ export const planEVTripCore = async (payload) => {
       }
     }
 
-    // ── PASS 2: wider radius, station ≤10 km from route (small real detour) ─
+    // ── PASS 2: wider radius, tight route proximity ────────────────────────
     if (!chosen) {
       console.log(`🔄 Pass 2 — wider search, tight route proximity`);
       for (const r of [140, 160, 200]) {
@@ -413,22 +448,18 @@ export const planEVTripCore = async (payload) => {
         "Charge to 100% here — sparse charging ahead. " +
         "Full charge gives maximum range to reach the next station.";
 
-      currentEnergy = effectiveBc; // simulate full charge
+      currentEnergy = effectiveBc;
       lastStopAlreadyBoosted = true;
 
       console.log(
         `🔋 Pass 3 — boosted "${lastStop.stationName}" to 100%. Retrying iteration...`,
       );
-      continue; // retry this whole iteration with more energy
+      continue;
     }
 
     // ── PASS 4: synthetic PlugShare stop ──────────────────────────────────
-    // All real-station options exhausted. Place a stop at 80% of remaining
-    // range on the actual route polyline. Battery is drained by distance / eff
-    // (no detour since the stop is on-route). Tell the user to find a real
-    // charger here via PlugShare.
     if (!chosen) {
-      lastStopAlreadyBoosted = false; // reset for next segment
+      lastStopAlreadyBoosted = false;
 
       const stopKm = Math.min(
         currentRouteKm + usableRangeKm() * 0.8,
@@ -438,13 +469,12 @@ export const planEVTripCore = async (payload) => {
       const [stopLat, stopLng] = poly[stopIndex];
 
       const routeLegKm = cumKm[stopIndex] - currentRouteKm;
-      const energyNeeded = routeLegKm / eff; // drain = distance / efficiency
+      const energyNeeded = routeLegKm / eff;
       const energyAfterArrival = Math.max(
         reserveEnergy,
         currentEnergy - energyNeeded,
       );
 
-      // PlugShare deep-link — opens the map centred on this coordinate
       const plugshareUrl = `https://www.plugshare.com/?latitude=${stopLat.toFixed(5)}&longitude=${stopLng.toFixed(5)}&zoomLevel=14`;
 
       console.log(
@@ -496,7 +526,6 @@ export const planEVTripCore = async (payload) => {
         `| synthetic=${chosen.isSynthetic || false}`,
     );
 
-    // Charge to target (80% normally, 100% if boosted by Pass 3)
     currentEnergy = effectiveBc * (stopRecord.chargeToPercent / 100);
     currentRouteKm = chosen.routeKm;
     currentIndex = findClosestIndexByKm(cumKm, currentRouteKm, currentIndex);
@@ -672,7 +701,6 @@ export const getSoCCurveCore = async (payload) => {
       });
     }
 
-    // Charge to target — 80% normally, 100% if this stop was boosted by Pass 3
     currentEnergy = effectiveBc * (stop.chargeToPercent / 100);
     socCurve.push({
       distance: Number((stopKm + 0.5).toFixed(1)),

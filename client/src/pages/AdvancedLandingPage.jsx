@@ -37,6 +37,8 @@ const AdvancedLandingPage = () => {
   const [socCurve, setSocCurve] = useState([]);
   const [socReady, setSocReady] = useState(false);
   const [loading, setLoading] = useState(false);
+  // NEW: track error state so user sees something went wrong
+  const [error, setError] = useState(null);
 
   const tripSessionRef = useRef(0);
   const distanceRef = useRef(0);
@@ -64,41 +66,36 @@ const AdvancedLandingPage = () => {
     return "Heavy";
   }, [sim.trafficLevel]);
 
-  // const handleSubmit = () => {
-  //   setTripData(null);
-  //   setSocCurve([]);
-  //   setSocReady(false);
-  //   setDistance(0);
-  //   setDuration(0);
-  //   setRoutePolyline(null);
-  //   distanceRef.current = 0;
-  //   durationRef.current = 0;
-  //   routePolylineRef.current = null;
-  //   setShowMap(true);
-  //   setLoading(true);
-  //   tripSessionRef.current += 1;
-  // };
   const handleSubmit = () => {
+    // FIX 1: bump session FIRST so any in-flight old request gets cancelled
     tripSessionRef.current += 1;
+
+    // FIX 2: reset UI state immediately
     setTripData(null);
     setSocCurve([]);
     setSocReady(false);
+    setError(null);
+
+    // FIX 3: show loading spinner RIGHT AWAY — not inside the async function
+    setLoading(true);
     setShowMap(true);
 
-    // If route already exists in refs, replan immediately
+    // If route already loaded in refs → replan immediately (no need to re-fetch map)
     if (distanceRef.current && routePolylineRef.current?.length >= 2) {
-        advancedPlanTrip();
+      advancedPlanTrip();
     } else {
-        // Fresh route needed — reset everything so MapComponent refetches
-        setDistance(0);
-        setDuration(0);
-        setRoutePolyline(null);
-        distanceRef.current = 0;
-        durationRef.current = 0;
-        routePolylineRef.current = null;
+      // Fresh route needed — reset refs so MapComponent fetches the route again
+      setDistance(0);
+      setDuration(0);
+      setRoutePolyline(null);
+      distanceRef.current = 0;
+      durationRef.current = 0;
+      routePolylineRef.current = null;
+      // loading stays true — will be turned off after route + plan both finish
     }
-};
+  };
 
+  // Called by MapComponent once it has the route
   const handleRouteReady = ({ distance, duration, polyline }) => {
     distanceRef.current = distance;
     durationRef.current = duration;
@@ -108,23 +105,20 @@ const AdvancedLandingPage = () => {
     setRoutePolyline(polyline);
   };
 
-  // useEffect(() => {
-  //   if (!distance || !routePolyline || !showMap) return;
-  //   clearTimeout(timeoutRef.current);
-  //   timeoutRef.current = setTimeout(() => {
-  //     advancedPlanTrip();
-  //   }, 450);
-  //   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // }, [distance, routePolyline, sim, form, showMap]);
+  // FIX 4: only trigger plan when a NEW route arrives (not on every re-render)
+  // The 450ms debounce prevents double-firing if MapComponent calls back twice
   useEffect(() => {
     if (!distance || !routePolyline || !showMap) return;
     clearTimeout(timeoutRef.current);
+    // loading is already true (set in handleSubmit), no need to set again
     timeoutRef.current = setTimeout(() => {
       advancedPlanTrip();
     }, 450);
-}, [distance, routePolyline]); // ← only replan when NEW route arrives
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distance, routePolyline]);
 
   const advancedPlanTrip = async () => {
+    // Capture session at the START of this call
     const session = tripSessionRef.current;
     const f = formRef.current;
     const s = simRef.current;
@@ -137,7 +131,10 @@ const AdvancedLandingPage = () => {
       return;
     }
 
+    // FIX 5: always ensure loading=true when we actually start the API call
     setLoading(true);
+    setError(null);
+
     try {
       const response = await fetch(
         "http://localhost:4500/api/ev/advanced/plan-trip",
@@ -170,15 +167,30 @@ const AdvancedLandingPage = () => {
         },
       );
 
+      // FIX 6: if a newer session started while we were waiting, discard this result
       if (session !== tripSessionRef.current) return;
+
+      if (!response.ok) {
+        // FIX 7: surface HTTP errors (including 429) to the user instead of silent fail
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || `Server error ${response.status}`);
+      }
+
       const data = await response.json();
+
+      // One more session check after parsing
+      if (session !== tripSessionRef.current) return;
+
       setTripData(data);
-      console.log("ADVANCED API RESPONSE:", data);
       setSocCurve([]);
       setSocReady(false);
     } catch (err) {
+      // FIX 8: only show error if this session is still active
+      if (session !== tripSessionRef.current) return;
       console.error("Advanced trip planning failed", err);
+      setError(err.message || "Trip planning failed. Please try again.");
     } finally {
+      // FIX 9: always turn off loading if this is still the active session
       if (session === tripSessionRef.current) setLoading(false);
     }
   };
@@ -213,6 +225,7 @@ const AdvancedLandingPage = () => {
     };
   }, [tripData, routePolyline, distance, duration, form]);
 
+  // Fetch SoC curve once tripData is ready
   useEffect(() => {
     if (!tripData) return;
     const fetchSocCurve = async () => {
@@ -282,6 +295,19 @@ const AdvancedLandingPage = () => {
           Run Advanced Plan
         </button>
       </div>
+
+      {/* ── ERROR BANNER — shows if API fails or 429 hits ── */}
+      {error && (
+        <div className="mx-10 mb-4 px-5 py-4 rounded-xl bg-red-500/20 border border-red-400/30 text-red-300 flex justify-between items-center">
+          <span>⚠️ {error}</span>
+          <button
+            onClick={handleSubmit}
+            className="ml-4 px-3 py-1 rounded-lg bg-red-500/30 hover:bg-red-500/50 text-sm transition"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* ── TOP GRID ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 px-10 pb-10">
@@ -491,8 +517,9 @@ const AdvancedLandingPage = () => {
 
               {!tripData ? (
                 <p className="text-gray-400 text-sm">
-                  Run planning after route is ready. Map → route → advanced
-                  plan.
+                  {loading
+                    ? "Calculating your trip..."
+                    : "Run planning after route is ready. Map → route → advanced plan."}
                 </p>
               ) : (
                 <>
@@ -594,6 +621,9 @@ const AdvancedLandingPage = () => {
           <p className="text-gray-400 mt-2">
             Recalculating stops, energy & SoC curve 🔋
           </p>
+          <p className="text-gray-500 mt-1 text-sm">
+            This can take 10–30s for long routes
+          </p>
         </div>
       )}
 
@@ -603,12 +633,12 @@ const AdvancedLandingPage = () => {
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-semibold">🗺️ Route + Charging Stops</h3>
-             <button
-    onClick={handleSubmit}
-    className="w-full bg-blue-500/90 hover:bg-blue-500 py-3 rounded-lg font-semibold transition"
->
-    🗺️ Show Map & Plan
-</button>
+              <button
+                onClick={handleSubmit}
+                className="bg-blue-500/90 hover:bg-blue-500 px-4 py-2 rounded-lg font-semibold transition text-sm"
+              >
+                🗺️ Replan Trip
+              </button>
             </div>
             <MapComponent
               start={form.start}
@@ -628,7 +658,6 @@ const AdvancedLandingPage = () => {
             ⚡ Charging Stops Along Your Journey
           </h3>
 
-          {/* Legend */}
           <div className="flex justify-center gap-4 mb-8 text-xs text-gray-400">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />{" "}
@@ -652,7 +681,6 @@ const AdvancedLandingPage = () => {
                   key={idx}
                   className={`bg-white/10 p-5 rounded-2xl border transition hover:scale-[1.02] ${getCardBorder(stop)}`}
                 >
-                  {/* Header */}
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-gray-400">
                       Stop #{idx + 1}
@@ -663,23 +691,17 @@ const AdvancedLandingPage = () => {
                       {badge.label}
                     </span>
                   </div>
-
-                  {/* Name */}
                   <h4 className="text-lg font-semibold mt-2 truncate">
                     🔌 {stop.stationName}
                   </h4>
                   <p className="text-sm text-gray-400 mt-1">
                     📍 {stop.lat?.toFixed(3)}, {stop.lng?.toFixed(3)}
                   </p>
-
-                  {/* Warning note for boosted / synthetic stops */}
                   {stop.note && (
                     <p className="text-xs mt-3 px-3 py-2 rounded-lg bg-yellow-500/10 text-yellow-300 border border-yellow-400/20 leading-relaxed">
                       ⚠️ {stop.note}
                     </p>
                   )}
-
-                  {/* Stats */}
                   <div className="mt-4 space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Distance</span>
@@ -706,18 +728,12 @@ const AdvancedLandingPage = () => {
                     <div className="flex justify-between">
                       <span className="text-gray-400">Charge to</span>
                       <span
-                        className={`font-medium ${
-                          stop.chargeToPercent === 100
-                            ? "text-purple-400"
-                            : "text-blue-400"
-                        }`}
+                        className={`font-medium ${stop.chargeToPercent === 100 ? "text-purple-400" : "text-blue-400"}`}
                       >
                         {stop.chargeToPercent ?? 80}%
                       </span>
                     </div>
                   </div>
-
-                  {/* Footer actions */}
                   <div className="mt-4 flex justify-between items-center">
                     {stop.isSynthetic && stop.plugshareUrl ? (
                       <a
@@ -738,7 +754,6 @@ const AdvancedLandingPage = () => {
                         🧭 Navigate
                       </a>
                     )}
-
                     <span className="text-xs text-gray-500">
                       {stop.isSynthetic
                         ? "Check PlugShare"
@@ -783,7 +798,7 @@ const AdvancedLandingPage = () => {
           <BarGraph payload={analyticsPayload} />
         </div>
       )}
-     
+
       {/* ── ENERGY PIE CHART ── */}
       {analyticsPayload && (
         <div className="px-10 pb-20">

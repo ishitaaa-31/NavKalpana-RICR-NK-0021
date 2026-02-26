@@ -177,15 +177,6 @@ npm run dev
 
 ---
 
-## Screenshots (Add Later)
-
-* Home Page
-* Route Result Page
-* SoC Curve Graph
-* Energy Analytics Dashboard
-
----
-
 ## Performance Notes
 
 * Planning accuracy within realistic EV usage range

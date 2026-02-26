@@ -87,7 +87,7 @@ const MapComponent = ({
 
   const data = await res.json();
    if (!data || data.lat == null || data.lng == null) {
-    return null; // ✅ prevent undefined crash
+    return null; // 
   }
   return [data.lat, data.lng];
 };
@@ -138,13 +138,13 @@ const MapComponent = ({
 useEffect(() => {
   if (!start || !destination) return;
 
-  let isActive = true; // ✅ prevents stale updates
+  let isActive = true; // 
 
   // 🔁 RESET safely
   setRoute([]);
   setFilteredStations([]);
-  setStartPos(null);   // ✅ IMPORTANT
-  setEndPos(null);     // ✅ IMPORTANT
+  setStartPos(null);   // 
+  setEndPos(null);     //
   hasSentStations.current = false;
 
   const fetchRoute = async () => {
@@ -152,10 +152,10 @@ useEffect(() => {
       const startLatLng = await getCoordinates(start);
       const endLatLng = await getCoordinates(destination);
 
-      // 🛑 STOP if component updated
+      // STOP if component updated
       if (!isActive) return;
 
-      // 🛑 Validate coords
+      // Validate coords
       if (
         !startLatLng ||
         !endLatLng ||
@@ -184,7 +184,7 @@ useEffect(() => {
         c[0],
       ]);
 
-      // 🛑 FINAL VALIDATION
+      
       if (!formatted.length) return;
 
       setRoute(formatted);
@@ -202,11 +202,11 @@ useEffect(() => {
 
   fetchRoute();
 
-  // ✅ CLEANUP (MOST IMPORTANT)
+  
   return () => {
     isActive = false;
   };
-}, [start, destination,form]);
+}, [start, destination]);
 
 
 

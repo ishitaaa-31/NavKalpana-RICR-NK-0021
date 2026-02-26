@@ -165,7 +165,7 @@ export const advancedPlanTrip = async (req, res, next) => {
       electricityRate,
     };
 
-    // ✅ call old logic
+    
    const base = await planEVTripCore(adjustedPayload);
 
     // Add metadata (so frontend can show sliders result)

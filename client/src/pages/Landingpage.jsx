@@ -18,9 +18,9 @@ const LandingPage = () => {
   const [distance, setDistance] = useState(0);
   const [duration, setDuration] = useState(0);
   const [routePolyline, setRoutePolyline] = useState(null);
-  const [loading, setLoading] = useState(false);       // ✅ kept once (removed duplicate)
-  const [tripData, setTripData] = useState(null);      // ✅ added missing state
-  const [socCurve, setSocCurve] = useState([]);        // ✅ added missing state
+  const [loading, setLoading] = useState(false);       
+  const [tripData, setTripData] = useState(null);      
+  const [socCurve, setSocCurve] = useState([]);       
   const [socReady, setSocReady] = useState(false);
   const [error, setError] = useState(null);
 

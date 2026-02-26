@@ -155,7 +155,7 @@ const Home = () => {
         {/* CTA */}
         <div className="mt-12 flex justify-center">
           <button
-            onClick={() => navigate("/landingPage")}
+            onClick={() => navigate("advanced")}
             className="cta-btn syne font-bold px-8 py-4 rounded-xl flex items-center gap-2"
             style={{ letterSpacing: "0.03em" }}
           >

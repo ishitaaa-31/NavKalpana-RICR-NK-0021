@@ -67,13 +67,17 @@ export const getEVStations = async (req, res) => {
 export const getCoordinates = async (req, res) => {
   try {
     const { place } = req.query;
-    const response = await axios.get("https://nominatim.openstreetmap.org/search", {
-      params: { format: "json", q: `${place},India`, limit: 1 },
-      headers: { "User-Agent": "ev-planner-app" },
-      timeout: 15000,
-    });
+    const response = await axios.get(
+      "https://nominatim.openstreetmap.org/search",
+      {
+        params: { format: "json", q: `${place},India`, limit: 1 },
+        headers: { "User-Agent": "ev-planner-app" },
+        timeout: 15000,
+      },
+    );
 
-    if (!response.data.length) return res.status(404).json({ message: "Location not found" });
+    if (!response.data.length)
+      return res.status(404).json({ message: "Location not found" });
 
     res.json({
       lat: parseFloat(response.data[0].lat),
@@ -119,8 +123,8 @@ export const planEVTripCore = async (payload) => {
 
   const bc = Number(batteryCapacity);
   const usablePct = Number(usablePercentage ?? 100);
-  const effectiveBc = bc * (usablePct / 100); // actual usable kWh
-  const eff = Number(efficiency); // km/kWh
+  const effectiveBc = bc * (usablePct / 100);
+  const eff = Number(efficiency);
   const tripKm = Number(distance);
   const reservePct = Number(reservePercentage ?? 15);
   const startSoc = Number(currentCharge);
@@ -144,16 +148,16 @@ export const planEVTripCore = async (payload) => {
     throw err;
   }
 
-  // ------- Energy constants -------
   const reserveEnergy = effectiveBc * (reservePct / 100);
   const targetSoC = 80;
   const targetEnergy = effectiveBc * (targetSoC / 100);
   const chargingPower = 50; // kW
 
-  // ------- 1) Subsample polyline for performance -------
+  // ------- 1) Subsample polyline -------
   const SUBSAMPLE = Math.max(1, Math.floor(routePolyline.length / 1500));
   const poly = [];
-  for (let i = 0; i < routePolyline.length; i += SUBSAMPLE) poly.push(routePolyline[i]);
+  for (let i = 0; i < routePolyline.length; i += SUBSAMPLE)
+    poly.push(routePolyline[i]);
   if (poly[poly.length - 1] !== routePolyline[routePolyline.length - 1])
     poly.push(routePolyline[routePolyline.length - 1]);
 
@@ -168,12 +172,12 @@ export const planEVTripCore = async (payload) => {
   global.__OCP_CACHE__ = global.__OCP_CACHE__ || new Map();
 
   const cacheKey = (lat, lng, r, m) =>
-    `${Math.round(lat * 100) / 100},${Math.round(lng * 100) / 100},r=${r},m=${m}`;
+    `${Math.round(lat * 10) / 10},${Math.round(lng * 10) / 10},r=${r},m=${m}`;
 
   const fetchStationsAtPoint = async (
     lat,
     lng,
-    { radiusKm = 40, maxresults = 60, retries = 3, cacheTtlMs = 3600000 } = {}
+    { radiusKm = 40, maxresults = 60, retries = 3, cacheTtlMs = 3600000 } = {},
   ) => {
     const key = cacheKey(lat, lng, radiusKm, maxresults);
     const now = Date.now();
@@ -183,25 +187,35 @@ export const planEVTripCore = async (payload) => {
     let attempt = 0;
     while (attempt <= retries) {
       try {
-        const response = await axios.get("https://api.openchargemap.io/v3/poi/", {
-          params: {
-            output: "json",
-            latitude: lat,
-            longitude: lng,
-            distance: radiusKm,
-            maxresults,
-            key: process.env.OPENCHARGE_API_KEY,
+        const response = await axios.get(
+          "https://api.openchargemap.io/v3/poi/",
+          {
+            params: {
+              output: "json",
+              latitude: lat,
+              longitude: lng,
+              distance: radiusKm,
+              maxresults,
+              key: process.env.OPENCHARGE_API_KEY,
+            },
+            timeout: 15000,
           },
-          timeout: 15000,
-        });
+        );
 
         const data = (response.data || [])
           .map((item) => ({
-            name: item.AddressInfo?.Title,
+            name: item.AddressInfo?.Title || "Unknown",
             lat: item.AddressInfo?.Latitude,
             lng: item.AddressInfo?.Longitude,
           }))
-          .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng));
+          .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+          // Deterministic sort — API result order must never affect the trip plan
+          .sort((a, b) => {
+            const nc = a.name.localeCompare(b.name);
+            if (nc !== 0) return nc;
+            if (a.lat !== b.lat) return a.lat - b.lat;
+            return a.lng - b.lng;
+          });
 
         global.__OCP_CACHE__.set(key, { ts: now, data });
         return data;
@@ -217,33 +231,104 @@ export const planEVTripCore = async (payload) => {
     return [];
   };
 
-  const fetchStationsWithExpand = async (lat, lng) => {
-    for (const r of [25, 40, 60, 80, 120]) {
-      const sts = await fetchStationsAtPoint(lat, lng, { radiusKm: r, maxresults: 60 });
-      if (sts.length) return { stations: sts, radiusUsed: r, real: true };
+  // ------- 3) Candidate scorer (shared by Pass 1 & Pass 2) -------
+  const MIN_STOP_GAP_KM = 60;
+  const SAMPLE_STRIDE = 5;
+
+  const scoreCandidates = (
+    stations,
+    windowSamples,
+    currentRouteKm,
+    visitedKeys,
+    maxDistToRoute,
+    maxDetour,
+    currentEnergyVal,
+  ) => {
+    const stationKey = (lat, lng) =>
+      `${Math.round(lat * 1000) / 1000},${Math.round(lng * 1000) / 1000}`;
+
+    const candidates = [];
+
+    for (const st of stations) {
+      const sk = stationKey(st.lat, st.lng);
+      if (visitedKeys.has(sk)) continue;
+
+      let best = null;
+      let bestD = Infinity;
+
+      for (const p of windowSamples) {
+        if (p.km < currentRouteKm + MIN_STOP_GAP_KM) continue;
+        const d = getDistance(p.lat, p.lng, st.lat, st.lng);
+        if (d < bestD) {
+          bestD = d;
+          best = p;
+        }
+      }
+
+      if (!best || bestD > maxDistToRoute) continue;
+
+      const detourKm = 2 * bestD;
+      if (detourKm > maxDetour) continue;
+
+      const routeLegKm = best.km - currentRouteKm;
+      if (routeLegKm <= 1) continue;
+
+      const energyNeeded = (routeLegKm + detourKm) / eff;
+      if (currentEnergyVal - energyNeeded < reserveEnergy) continue;
+
+      const energyAfterArrival = currentEnergyVal - energyNeeded;
+      // Prefer farthest reachable station → fewest total stops
+      const score = -best.km + detourKm * 1.5;
+
+      candidates.push({
+        stationName: st.name,
+        lat: st.lat,
+        lng: st.lng,
+        routeKm: best.km,
+        distToRouteKm: bestD,
+        detourKm,
+        energyAfterArrival,
+        arrivalSoC: (energyAfterArrival / effectiveBc) * 100,
+        score,
+        isSynthetic: false,
+        stationKey: sk,
+      });
     }
-    return { stations: [], radiusUsed: 120, real: false };
+
+    if (!candidates.length) return null;
+
+    candidates.sort((a, b) => {
+      const diff = a.score - b.score;
+      if (Math.abs(diff) > 0.001) return diff;
+      return a.stationName.localeCompare(b.stationName);
+    });
+
+    return candidates[0];
   };
 
-  // ------- 3) Stop selection loop -------
-  const SEARCH_TRIGGER_RATIO = 0.70;
-  const MAX_DIST_TO_ROUTE_KM = 15;
-  const MAX_DETOUR_KM = 20;
-  const SAMPLE_STRIDE = 5;
+  // ------- 4) Stop selection loop -------
+  const SEARCH_TRIGGER_RATIO = 0.75;
 
   let currentEnergy = effectiveBc * (startSoc / 100);
   let currentRouteKm = 0;
   let currentIndex = 0;
   const recommendedStops = [];
+  const visitedStationKeys = new Set();
+  const stationKey = (lat, lng) =>
+    `${Math.round(lat * 1000) / 1000},${Math.round(lng * 1000) / 1000}`;
 
-  const usableRangeKm = () => Math.max(0, (currentEnergy - reserveEnergy) * eff);
+  // Tracks whether the last stop was already boosted to 100% for the gap strategy
+  let lastStopAlreadyBoosted = false;
+
+  const usableRangeKm = () =>
+    Math.max(0, (currentEnergy - reserveEnergy) * eff);
 
   while (currentRouteKm < tripKm && recommendedStops.length < 20) {
     const remainingTripKm = tripKm - currentRouteKm;
 
     if (usableRangeKm() >= remainingTripKm) {
       console.log(
-        `✅ Can reach destination. Remaining range=${usableRangeKm().toFixed(1)}km`
+        `✅ Can reach destination. Range left=${usableRangeKm().toFixed(1)}km`,
       );
       break;
     }
@@ -251,17 +336,11 @@ export const planEVTripCore = async (payload) => {
     const searchAtKm = currentRouteKm + usableRangeKm() * SEARCH_TRIGGER_RATIO;
 
     let searchIndex = currentIndex;
-    while (searchIndex < cumKm.length - 1 && cumKm[searchIndex] < searchAtKm) searchIndex++;
+    while (searchIndex < cumKm.length - 1 && cumKm[searchIndex] < searchAtKm)
+      searchIndex++;
     if (searchIndex >= cumKm.length - 1) break;
 
     const [searchLat, searchLng] = poly[searchIndex];
-    console.log(
-      `🔍 Searching at km=${searchAtKm.toFixed(1)}, (${searchLat.toFixed(3)}, ${searchLng.toFixed(
-        3
-      )})`
-    );
-
-    const { stations: nearbyStations } = await fetchStationsWithExpand(searchLat, searchLng);
 
     const maxReachKm = currentRouteKm + usableRangeKm();
     const windowSamples = [];
@@ -273,71 +352,107 @@ export const planEVTripCore = async (payload) => {
 
     let chosen = null;
 
-    // Try real stations
-    if (nearbyStations.length && windowSamples.length) {
-      const candidates = [];
-
-      for (const st of nearbyStations) {
-        let best = null;
-        let bestD = Infinity;
-
-        for (const p of windowSamples) {
-          if (p.km < currentRouteKm + 5) continue;
-          const d = getDistance(p.lat, p.lng, st.lat, st.lng);
-          if (d < bestD) {
-            bestD = d;
-            best = p;
-          }
-        }
-
-        if (!best || bestD > MAX_DIST_TO_ROUTE_KM) continue;
-
-        const detourKm = 2 * bestD;
-        if (detourKm > MAX_DETOUR_KM) continue;
-
-        const routeLegKm = best.km - currentRouteKm;
-        if (routeLegKm <= 1) continue;
-
-        const energyNeeded = (routeLegKm + detourKm) / eff;
-        if (currentEnergy - energyNeeded < reserveEnergy) continue;
-
-        const energyAfterArrival = currentEnergy - energyNeeded;
-        const score = Math.abs(best.km - searchAtKm) + detourKm * 3;
-
-        candidates.push({
-          stationName: st.name || "EV Charging Station",
-          lat: st.lat,
-          lng: st.lng,
-          routeKm: best.km,
-          distToRouteKm: bestD,
-          detourKm,
-          energyAfterArrival,
-          arrivalSoC: (energyAfterArrival / effectiveBc) * 100,
-          score,
-          isSynthetic: false,
+    // ── PASS 1: normal radius, station ≤25 km from route ──────────────────
+    if (!chosen) {
+      for (const r of [25, 40, 60, 80, 120]) {
+        const stations = await fetchStationsAtPoint(searchLat, searchLng, {
+          radiusKm: r,
         });
-      }
-
-      if (candidates.length) {
-        candidates.sort((a, b) => a.score - b.score);
-        chosen = candidates[0];
+        if (!stations.length) continue;
+        const best = scoreCandidates(
+          stations,
+          windowSamples,
+          currentRouteKm,
+          visitedStationKeys,
+          25,
+          30,
+          currentEnergy,
+        );
+        if (best) {
+          chosen = best;
+          console.log(`✅ Pass 1 station @ r=${r}km: "${best.stationName}"`);
+          break;
+        }
       }
     }
 
-    // Fallback: synthetic stop on-route
+    // ── PASS 2: wider radius, station ≤10 km from route (small real detour) ─
     if (!chosen) {
-      const stopKm = Math.min(searchAtKm, maxReachKm - 5);
+      console.log(`🔄 Pass 2 — wider search, tight route proximity`);
+      for (const r of [140, 160, 200]) {
+        const stations = await fetchStationsAtPoint(searchLat, searchLng, {
+          radiusKm: r,
+          maxresults: 80,
+        });
+        if (!stations.length) continue;
+        const best = scoreCandidates(
+          stations,
+          windowSamples,
+          currentRouteKm,
+          visitedStationKeys,
+          10,
+          20,
+          currentEnergy,
+        );
+        if (best) {
+          chosen = best;
+          console.log(
+            `✅ Pass 2 station @ r=${r}km (tight detour): "${best.stationName}"`,
+          );
+          break;
+        }
+      }
+    }
+
+    // ── PASS 3: boost last stop to 100% charge, retry ─────────────────────
+    if (!chosen && recommendedStops.length > 0 && !lastStopAlreadyBoosted) {
+      const lastStop = recommendedStops[recommendedStops.length - 1];
+      lastStop.chargeToPercent = 100;
+      lastStop.chargeToFull = true;
+      lastStop.note =
+        "Charge to 100% here — sparse charging ahead. " +
+        "Full charge gives maximum range to reach the next station.";
+
+      currentEnergy = effectiveBc; // simulate full charge
+      lastStopAlreadyBoosted = true;
+
+      console.log(
+        `🔋 Pass 3 — boosted "${lastStop.stationName}" to 100%. Retrying iteration...`,
+      );
+      continue; // retry this whole iteration with more energy
+    }
+
+    // ── PASS 4: synthetic PlugShare stop ──────────────────────────────────
+    // All real-station options exhausted. Place a stop at 80% of remaining
+    // range on the actual route polyline. Battery is drained by distance / eff
+    // (no detour since the stop is on-route). Tell the user to find a real
+    // charger here via PlugShare.
+    if (!chosen) {
+      lastStopAlreadyBoosted = false; // reset for next segment
+
+      const stopKm = Math.min(
+        currentRouteKm + usableRangeKm() * 0.8,
+        maxReachKm - 5,
+      );
       const stopIndex = findClosestIndexByKm(cumKm, stopKm, currentIndex);
       const [stopLat, stopLng] = poly[stopIndex];
 
       const routeLegKm = cumKm[stopIndex] - currentRouteKm;
-      const energyNeeded = routeLegKm / eff;
-      const energyAfterArrival = Math.max(reserveEnergy, currentEnergy - energyNeeded);
+      const energyNeeded = routeLegKm / eff; // drain = distance / efficiency
+      const energyAfterArrival = Math.max(
+        reserveEnergy,
+        currentEnergy - energyNeeded,
+      );
 
-      console.log(`⚠️  No real station — synthetic stop at km=${stopKm.toFixed(1)}`);
+      // PlugShare deep-link — opens the map centred on this coordinate
+      const plugshareUrl = `https://www.plugshare.com/?latitude=${stopLat.toFixed(5)}&longitude=${stopLng.toFixed(5)}&zoomLevel=14`;
+
+      console.log(
+        `⚠️  Pass 4 — synthetic PlugShare stop at km=${stopKm.toFixed(1)}`,
+      );
 
       chosen = {
-        stationName: "Charging Stop (Plan Ahead)",
+        stationName: "Find a Charger Here",
         lat: stopLat,
         lng: stopLng,
         routeKm: cumKm[stopIndex],
@@ -345,14 +460,21 @@ export const planEVTripCore = async (payload) => {
         detourKm: 0,
         energyAfterArrival,
         arrivalSoC: (energyAfterArrival / effectiveBc) * 100,
-        score: 0,
         isSynthetic: true,
+        stationKey: null,
+        plugshareUrl,
+        note:
+          "No charging station found in our database for this area. " +
+          "You will need to find a charger here — tap the PlugShare link to locate one near this point.",
       };
     }
 
+    // ── Commit the chosen stop ─────────────────────────────────────────────
+    if (chosen.stationKey) visitedStationKeys.add(chosen.stationKey);
+    lastStopAlreadyBoosted = false;
     currentEnergy = chosen.energyAfterArrival;
 
-    recommendedStops.push({
+    const stopRecord = {
       stationName: chosen.stationName,
       lat: chosen.lat,
       lng: chosen.lng,
@@ -360,23 +482,27 @@ export const planEVTripCore = async (payload) => {
       distToRouteKm: Number(chosen.distToRouteKm.toFixed(2)),
       detourKm: Number(chosen.detourKm.toFixed(2)),
       arrivalSoC: Number(chosen.arrivalSoC.toFixed(2)),
-      isSynthetic: chosen.isSynthetic,
-    });
+      isSynthetic: chosen.isSynthetic || false,
+      chargeToPercent: chosen.chargeToPercent ?? 80,
+      ...(chosen.plugshareUrl && { plugshareUrl: chosen.plugshareUrl }),
+      ...(chosen.note && { note: chosen.note }),
+    };
+
+    recommendedStops.push(stopRecord);
 
     console.log(
-      `✅ Stop ${recommendedStops.length}: "${chosen.stationName}" @ ${chosen.routeKm.toFixed(
-        1
-      )}km` +
-        ` | arrivalSoC=${chosen.arrivalSoC.toFixed(1)}% | synthetic=${chosen.isSynthetic}`
+      `✅ Stop ${recommendedStops.length}: "${chosen.stationName}" ` +
+        `@ ${chosen.routeKm.toFixed(1)}km | arrivalSoC=${chosen.arrivalSoC.toFixed(1)}% ` +
+        `| synthetic=${chosen.isSynthetic || false}`,
     );
 
-    // charge to 80%
-    currentEnergy = Math.min(targetEnergy, effectiveBc);
+    // Charge to target (80% normally, 100% if boosted by Pass 3)
+    currentEnergy = effectiveBc * (stopRecord.chargeToPercent / 100);
     currentRouteKm = chosen.routeKm;
     currentIndex = findClosestIndexByKm(cumKm, currentRouteKm, currentIndex);
   }
 
-  // ------- 4) Analytics -------
+  // ------- 5) Analytics -------
   let simEnergy = effectiveBc * (startSoc / 100);
   let lastKm = 0;
   let detourTotalKm = 0;
@@ -389,7 +515,8 @@ export const planEVTripCore = async (payload) => {
 
     simEnergy = Math.max(0, simEnergy - (driveKm + detourKm) / eff);
 
-    const needToCharge = Math.max(0, targetEnergy - simEnergy);
+    const chargeTarget = effectiveBc * ((stop.chargeToPercent ?? 80) / 100);
+    const needToCharge = Math.max(0, chargeTarget - simEnergy);
     totalChargingTimeHours += needToCharge / chargingPower;
     simEnergy += needToCharge;
 
@@ -398,22 +525,22 @@ export const planEVTripCore = async (payload) => {
 
   const finalDriveKm = tripKm - lastKm;
   simEnergy = Math.max(0, simEnergy - finalDriveKm / eff);
-
   const totalKmWithDetours = tripKm + detourTotalKm;
   const totalEnergyRequired = totalKmWithDetours / eff;
   const totalCost = totalEnergyRequired * Number(electricityRate);
-
   const finalSoC = Math.max(0, (simEnergy / effectiveBc) * 100);
   const safeRange = Math.max(0, (simEnergy - reserveEnergy) * eff);
 
   console.log(`\n==== TRIP SUMMARY ====`);
   console.log(
-    `Stops: ${recommendedStops.length} | Charging: ${totalChargingTimeHours.toFixed(2)}hrs`
+    `Stops: ${recommendedStops.length} | Charging: ${totalChargingTimeHours.toFixed(2)}hrs`,
   );
-  console.log(`Final SoC: ${finalSoC.toFixed(2)}% | Safe range: ${safeRange.toFixed(2)}km`);
+  console.log(
+    `Final SoC: ${finalSoC.toFixed(2)}% | Safe range: ${safeRange.toFixed(2)}km`,
+  );
   console.log(`======================\n`);
 
-  // ------- 5) Save -------
+  // ------- 6) Save -------
   const savedRoute = await Route.create({
     startLocation,
     destination,
@@ -422,7 +549,7 @@ export const planEVTripCore = async (payload) => {
     chargingStops: recommendedStops.length,
   });
 
-  // ------- 6) Return object (NO res here) -------
+  // ------- 7) Return -------
   return {
     message:
       recommendedStops.length > 0
@@ -448,7 +575,6 @@ export const planEVTrip = async (req, res, next) => {
     const data = await planEVTripCore(req.body);
     return res.status(200).json(data);
   } catch (error) {
-    // keep your previous behavior but cleaner
     console.error("EV Trip Error:", error);
     const status = error.statusCode || 500;
     return res.status(status).json({
@@ -470,7 +596,12 @@ export const getSoCCurveCore = async (payload) => {
     usablePercentage,
   } = payload || {};
 
-  if (!distance || !batteryCapacity || !efficiency || currentCharge === undefined) {
+  if (
+    !distance ||
+    !batteryCapacity ||
+    !efficiency ||
+    currentCharge === undefined
+  ) {
     const err = new Error("Missing required fields");
     err.statusCode = 400;
     throw err;
@@ -490,7 +621,6 @@ export const getSoCCurveCore = async (payload) => {
   const pushDrive = (fromKm, toKm) => {
     if (toKm <= fromKm) return;
     const energyAtStart = currentEnergy;
-
     for (let km = fromKm + STEP_KM; km < toKm; km += STEP_KM) {
       const energyLeft = Math.max(0, energyAtStart - (km - fromKm) / eff);
       socCurve.push({
@@ -499,7 +629,6 @@ export const getSoCCurveCore = async (payload) => {
         type: "drive",
       });
     }
-
     currentEnergy = Math.max(0, energyAtStart - (toKm - fromKm) / eff);
   };
 
@@ -514,6 +643,7 @@ export const getSoCCurveCore = async (payload) => {
       ...s,
       routeKm: Number(s.cumulativeDistance),
       detourKm: Number(s.detourKm || 0),
+      chargeToPercent: s.chargeToPercent ?? 80,
     }))
     .filter((s) => Number.isFinite(s.routeKm))
     .sort((a, b) => a.routeKm - b.routeKm);
@@ -527,20 +657,30 @@ export const getSoCCurveCore = async (payload) => {
       distance: Number(stopKm.toFixed(1)),
       soc: Number(Math.max(0, (currentEnergy / effectiveBc) * 100).toFixed(2)),
       type: "arrive_route",
+      isSynthetic: stop.isSynthetic || false,
     });
 
     if (stop.detourKm > 0) {
       currentEnergy = Math.max(0, currentEnergy - stop.detourKm / eff);
       socCurve.push({
         distance: Number(stopKm.toFixed(1)),
-        soc: Number(Math.max(0, (currentEnergy / effectiveBc) * 100).toFixed(2)),
+        soc: Number(
+          Math.max(0, (currentEnergy / effectiveBc) * 100).toFixed(2),
+        ),
         type: "detour",
+        isSynthetic: stop.isSynthetic || false,
       });
     }
 
-    // charge to 80%
-    currentEnergy = effectiveBc * 0.8;
-    socCurve.push({ distance: Number((stopKm + 0.5).toFixed(1)), soc: 80, type: "charge" });
+    // Charge to target — 80% normally, 100% if this stop was boosted by Pass 3
+    currentEnergy = effectiveBc * (stop.chargeToPercent / 100);
+    socCurve.push({
+      distance: Number((stopKm + 0.5).toFixed(1)),
+      soc: stop.chargeToPercent,
+      type: "charge",
+      isSynthetic: stop.isSynthetic || false,
+      chargeToFull: stop.chargeToPercent === 100,
+    });
 
     lastRouteKm = stopKm;
   }

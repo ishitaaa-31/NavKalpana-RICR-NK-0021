@@ -6,6 +6,7 @@ import {
   getSoCCurve,
   getCoordinates,
 } from "../controllers/evController.js";
+import { getTimeBreakdown } from "../controllers/analyticsController.js";
 
 import { advancedPlanTrip } from "../controllers/advancedController.js";
 
@@ -21,5 +22,8 @@ router.post("/soc-curve", getSoCCurve);
 
 // ✅ advanced planning (Part 2)
 router.post("/advanced/plan-trip", advancedPlanTrip);
+
+
+router.post("/analytics/time-breakdown", getTimeBreakdown);
 
 export default router;

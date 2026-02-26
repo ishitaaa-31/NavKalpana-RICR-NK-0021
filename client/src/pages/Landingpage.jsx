@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import MapComponent from "../components/MapComponent.jsx";
 import SocCurve from "../components/SocCurve.jsx";
 import { Zap, MapPin, Navigation, BatteryCharging, Gauge, Shield, Battery } from "lucide-react";
@@ -16,12 +16,12 @@ const LandingPage = () => {
 
   const [showMap, setShowMap] = useState(false);
   const [distance, setDistance] = useState(0);
-  const [socCurve, setSocCurve] = useState([]);
   const [duration, setDuration] = useState(0);
-  const [tripData, setTripData] = useState(null);
   const [routePolyline, setRoutePolyline] = useState(null);
   const [loading, setLoading] = useState(false);
   const [socReady, setSocReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const hasSpokenRef = useRef(false);
   const hasPlannedRef = useRef(false);
@@ -33,8 +33,9 @@ const LandingPage = () => {
   const resultsRef = useRef(null);
 const [showScrollHint, setShowScrollHint] = useState(false);
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
+  // ── "Calculate Route" button ──
   const handleSubmit = () => {
     setShowMap(true);
     setLoading(true);
@@ -68,6 +69,7 @@ const [showScrollHint, setShowScrollHint] = useState(false);
     timeoutRef.current = setTimeout(() => { planTrip(); }, 500);
   }, [distance, routePolyline, form]);
 
+  // ── Speech feedback ──
   useEffect(() => {
     if (loading && !hasSpokenRef.current) {
       speak("Planning your EV journey");
@@ -93,7 +95,7 @@ const [showScrollHint, setShowScrollHint] = useState(false);
             efficiency: Number(form.efficiency),
             usablePercentage: Number(form.usable),
             reservePercentage: Number(form.reserve),
-            currentCharge: Number(form.charge),
+            currentCharge:    Number(form.charge),
           }),
         });
         const data = await res.json();
@@ -104,6 +106,7 @@ const [showScrollHint, setShowScrollHint] = useState(false);
       }
     };
     fetchSocCurve();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripData]);
 
   useEffect(() => {
@@ -468,8 +471,8 @@ const scrollToResults = () => {
                     </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

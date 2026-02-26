@@ -1,15 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import MapComponent from "../components/MapComponent.jsx";
 import SocCurve from "../components/SocCurve.jsx";
-import {
-  Zap,
-  MapPin,
-  Navigation,
-  BatteryCharging,
-  Gauge,
-  Shield,
-  Battery,
-} from "lucide-react";
+import { Zap, MapPin, Navigation, BatteryCharging, Gauge, Shield, Battery } from "lucide-react";
 
 const LandingPage = () => {
   const [form, setForm] = useState({
@@ -26,9 +18,9 @@ const LandingPage = () => {
   const [distance, setDistance] = useState(0);
   const [duration, setDuration] = useState(0);
   const [routePolyline, setRoutePolyline] = useState(null);
-  const [loading, setLoading] = useState(false); // ✅ kept once (removed duplicate)
-  const [tripData, setTripData] = useState(null); // ✅ added missing state
-  const [socCurve, setSocCurve] = useState([]); // ✅ added missing state
+  const [loading, setLoading] = useState(false);       // ✅ kept once (removed duplicate)
+  const [tripData, setTripData] = useState(null);      // ✅ added missing state
+  const [socCurve, setSocCurve] = useState([]);        // ✅ added missing state
   const [socReady, setSocReady] = useState(false);
   const [error, setError] = useState(null);
 
@@ -42,8 +34,7 @@ const LandingPage = () => {
   const resultsRef = useRef(null);
   const [showScrollHint, setShowScrollHint] = useState(false);
 
-  const handleChange = (e) =>
-    setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
+  const handleChange = (e) => setForm((p) => ({ ...p, [e.target.name]: e.target.value }));
 
   // ── "Calculate Route" button ──
   const handleSubmit = () => {
@@ -61,10 +52,7 @@ const LandingPage = () => {
   };
 
   const handleRouteReady = ({ distance, duration, polyline }) => {
-    console.log("handleRouteReady fired", {
-      distance,
-      polylineLength: polyline?.length,
-    });
+    console.log("handleRouteReady fired", { distance, polylineLength: polyline?.length });
     distanceRef.current = distance;
     durationRef.current = duration;
     routePolylineRef.current = polyline;
@@ -77,14 +65,9 @@ const LandingPage = () => {
 
   useEffect(() => {
     if (!distance || !routePolyline) return;
-    console.log("useEffect triggered", {
-      distance,
-      polylineLength: routePolyline?.length,
-    });
+    console.log("useEffect triggered", { distance, polylineLength: routePolyline?.length });
     clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      planTrip();
-    }, 500);
+    timeoutRef.current = setTimeout(() => { planTrip(); }, 500);
   }, [distance, routePolyline, form]);
 
   // ── Speech feedback ──
@@ -113,7 +96,7 @@ const LandingPage = () => {
             efficiency: Number(form.efficiency),
             usablePercentage: Number(form.usable),
             reservePercentage: Number(form.reserve),
-            currentCharge: Number(form.charge),
+            currentCharge:    Number(form.charge),
           }),
         });
         const data = await res.json();
@@ -136,9 +119,7 @@ const LandingPage = () => {
     }
   }, [tripData]);
 
-  useEffect(() => {
-    formRef.current = form;
-  }, [form]);
+  useEffect(() => { formRef.current = form; }, [form]);
 
   const planTrip = async () => {
     const session = tripSessionRef.current;
@@ -146,10 +127,7 @@ const LandingPage = () => {
     const dist = distanceRef.current;
     const poly = routePolylineRef.current;
     const dur = durationRef.current;
-    if (!dist || !poly || poly.length < 2) {
-      setLoading(false);
-      return;
-    }
+    if (!dist || !poly || poly.length < 2) { setLoading(false); return; }
 
     try {
       const response = await fetch("http://localhost:4500/api/ev/plan-trip", {
@@ -181,9 +159,7 @@ const LandingPage = () => {
 
   const speak = (text) => {
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.volume = 1;
+    utterance.rate = 1; utterance.pitch = 1; utterance.volume = 1;
     speechSynthesis.speak(utterance);
   };
 
@@ -196,21 +172,16 @@ const LandingPage = () => {
   };
 
   const statFields = [
-    { label: "Battery", name: "battery", icon: Battery, hint: "kWh" },
-    { label: "Efficiency", name: "efficiency", icon: Gauge, hint: "km/kWh" },
-    { label: "Usable", name: "usable", icon: BatteryCharging, hint: "%" },
-    { label: "Reserve", name: "reserve", icon: Shield, hint: "%" },
-    { label: "Charge", name: "charge", icon: Zap, hint: "%" },
+    { label: "Battery",    name: "battery",    icon: Battery,         hint: "kWh" },
+    { label: "Efficiency", name: "efficiency", icon: Gauge,            hint: "km/kWh" },
+    { label: "Usable",     name: "usable",     icon: BatteryCharging, hint: "%" },
+    { label: "Reserve",    name: "reserve",    icon: Shield,           hint: "%" },
+    { label: "Charge",     name: "charge",     icon: Zap,              hint: "%" },
   ];
 
   return (
-    <div
-      className="min-h-screen text-white"
-      style={{
-        backgroundColor: "#050810",
-        fontFamily: "'Plus Jakarta Sans', sans-serif",
-      }}
-    >
+    <div className="min-h-screen text-white" style={{ backgroundColor: "#050810", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
@@ -299,99 +270,30 @@ const LandingPage = () => {
       {/* ══════════════════════════════
           PLANNER SECTION
       ══════════════════════════════ */}
-      <section
-        id="planner"
-        className="relative flex flex-col md:flex-row items-start justify-center gap-8 px-8 py-24 overflow-hidden"
-        style={{ minHeight: "100vh" }}
-      >
+      <section id="planner" className="relative flex flex-col md:flex-row items-start justify-center gap-8 px-8 py-24 overflow-hidden" style={{ minHeight: "100vh" }}>
         <div className="vp-grid" />
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            width: 600,
-            height: 600,
-            top: "30%",
-            right: "-10%",
-            background:
-              "radial-gradient(ellipse, rgba(139,92,246,.07) 0%, transparent 70%)",
-            borderRadius: "50%",
-            filter: "blur(60px)",
-          }}
-        />
+        <div className="absolute pointer-events-none" style={{ width: 600, height: 600, top: "30%", right: "-10%", background: "radial-gradient(ellipse, rgba(139,92,246,.07) 0%, transparent 70%)", borderRadius: "50%", filter: "blur(60px)" }} />
 
         {/* LEFT — route form */}
         <div className="relative z-10 w-full max-w-md flex-shrink-0">
           <div className="flex items-center gap-2 mb-4">
-            <div
-              className="w-6 h-0.5 rounded-full"
-              style={{ background: "#38bdf8" }}
-            />
-            <span
-              className="syne text-xs font-bold uppercase tracking-widest"
-              style={{ color: "#38bdf8" }}
-            >
-              Trip Planner
-            </span>
+            <div className="w-6 h-0.5 rounded-full" style={{ background: "#38bdf8" }} />
+            <span className="syne text-xs font-bold uppercase tracking-widest" style={{ color: "#38bdf8" }}>Trip Planner</span>
           </div>
-          <h2
-            className="syne font-extrabold mb-8"
-            style={{
-              fontSize: "clamp(2rem, 3vw, 2.6rem)",
-              letterSpacing: "-0.025em",
-              lineHeight: 1.08,
-            }}
-          >
-            Plan Smart
-            <br />
-            <span className="grad-text">EV Journeys</span>
+          <h2 className="syne font-extrabold mb-8" style={{ fontSize: "clamp(2rem, 3vw, 2.6rem)", letterSpacing: "-0.025em", lineHeight: 1.08 }}>
+            Plan Smart<br /><span className="grad-text">EV Journeys</span>
           </h2>
 
           <div className="glass p-7">
             <div className="relative mb-3">
-              <MapPin
-                size={15}
-                style={{
-                  position: "absolute",
-                  left: 14,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#38bdf8",
-                  opacity: 0.8,
-                }}
-              />
-              <input
-                name="start"
-                placeholder="Start Location"
-                value={form.start}
-                onChange={handleChange}
-                className="vp-input"
-              />
+              <MapPin size={15} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#38bdf8", opacity: .8 }} />
+              <input name="start" placeholder="Start Location" value={form.start} onChange={handleChange} className="vp-input" />
             </div>
             <div className="relative mb-5">
-              <Navigation
-                size={15}
-                style={{
-                  position: "absolute",
-                  left: 14,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#34d399",
-                  opacity: 0.8,
-                }}
-              />
-              <input
-                name="destination"
-                placeholder="Destination"
-                value={form.destination}
-                onChange={handleChange}
-                className="vp-input"
-              />
+              <Navigation size={15} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#34d399", opacity: .8 }} />
+              <input name="destination" placeholder="Destination" value={form.destination} onChange={handleChange} className="vp-input" />
             </div>
-            <button
-              onClick={handleSubmit}
-              className="calc-btn w-full py-4 rounded-xl syne font-bold flex items-center justify-center gap-2"
-              style={{ fontSize: "0.95rem", letterSpacing: "0.03em" }}
-            >
+            <button onClick={handleSubmit} className="calc-btn w-full py-4 rounded-xl syne font-bold flex items-center justify-center gap-2" style={{ fontSize: "0.95rem", letterSpacing: "0.03em" }}>
               <Zap size={18} /> Calculate Route
             </button>
           </div>
@@ -404,50 +306,29 @@ const LandingPage = () => {
               border: "1px solid rgba(56,189,248,.35)",
               background: "rgba(56,189,248,.08)",
             }}
-          ></span>
+          >
+          </span>
         </div>
 
         {/* RIGHT — vehicle stats */}
         <div className="relative z-10 w-full max-w-md flex-shrink-0">
           <div className="glass p-7">
             <div className="flex items-center gap-3 mb-6">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{
-                  background:
-                    "linear-gradient(135deg, rgba(52,211,153,.3), rgba(6,182,212,.15))",
-                }}
-              >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, rgba(52,211,153,.3), rgba(6,182,212,.15))" }}>
                 <BatteryCharging size={17} color="#34d399" />
               </div>
-              <span
-                className="syne font-bold"
-                style={{ color: "#f1f5f9", letterSpacing: "-0.01em" }}
-              >
-                Vehicle Stats
-              </span>
+              <span className="syne font-bold" style={{ color: "#f1f5f9", letterSpacing: "-0.01em" }}>Vehicle Stats</span>
             </div>
             <div className="space-y-4">
               {statFields.map((item) => (
                 <div key={item.name}>
                   <div className="flex justify-between items-center mb-1.5">
-                    <label
-                      className="syne text-xs font-bold uppercase tracking-widest flex items-center gap-1.5"
-                      style={{ color: "#64748b" }}
-                    >
-                      <item.icon size={11} color="#64748b" />
-                      {item.label}
+                    <label className="syne text-xs font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#64748b" }}>
+                      <item.icon size={11} color="#64748b" />{item.label}
                     </label>
-                    <span className="syne text-xs" style={{ color: "#334155" }}>
-                      {item.hint}
-                    </span>
+                    <span className="syne text-xs" style={{ color: "#334155" }}>{item.hint}</span>
                   </div>
-                  <input
-                    name={item.name}
-                    value={form[item.name]}
-                    onChange={handleChange}
-                    className="vp-stat-input"
-                  />
+                  <input name={item.name} value={form[item.name]} onChange={handleChange} className="vp-stat-input" />
                 </div>
               ))}
             </div>
@@ -457,65 +338,30 @@ const LandingPage = () => {
 
       {/* ══════════ LOADING ══════════ */}
       {loading && (
-        <div
-          className="fixed inset-0 flex flex-col items-center justify-center z-50"
-          style={{
-            background: "rgba(5,8,16,.93)",
-            backdropFilter: "blur(16px)",
-          }}
-        >
+        <div className="fixed inset-0 flex flex-col items-center justify-center z-50" style={{ background: "rgba(5,8,16,.93)", backdropFilter: "blur(16px)" }}>
           <div className="vp-spinner mb-6" />
-          <h2
-            className="syne font-bold text-xl"
-            style={{ color: "#f1f5f9", letterSpacing: "-0.02em" }}
-          >
-            Planning your EV journey...
-          </h2>
-          <p className="text-sm mt-2" style={{ color: "#475569" }}>
-            Finding routes, stations & optimizing battery 🔋
-          </p>
+          <h2 className="syne font-bold text-xl" style={{ color: "#f1f5f9", letterSpacing: "-0.02em" }}>Planning your EV journey...</h2>
+          <p className="text-sm mt-2" style={{ color: "#475569" }}>Finding routes, stations & optimizing battery 🔋</p>
         </div>
       )}
 
       {/* ══════════ MAP ══════════ */}
       {showMap && (
         <div className="px-8 pb-8">
-          <MapComponent
-            start={form.start}
-            destination={form.destination}
-            onRouteReady={handleRouteReady}
-            tripData={tripData}
-            form={form}
-          />
+          <MapComponent start={form.start} destination={form.destination} onRouteReady={handleRouteReady} tripData={tripData} form={form} />
         </div>
       )}
 
       {/* ══════════ ROUTE INFO ══════════ */}
       {distance > 0 && (
         <div className="px-8 pb-8">
-          <div
-            className="flex items-center gap-4 p-5 rounded-2xl max-w-sm"
-            style={{
-              background: "rgba(255,255,255,.03)",
-              border: "1px solid rgba(255,255,255,.07)",
-            }}
-          >
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: "rgba(56,189,248,.1)" }}
-            >
+          <div className="flex items-center gap-4 p-5 rounded-2xl max-w-sm" style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.07)" }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(56,189,248,.1)" }}>
               <MapPin size={16} color="#38bdf8" />
             </div>
             <div>
-              <p
-                className="syne font-bold text-lg"
-                style={{ color: "#f1f5f9", letterSpacing: "-0.02em" }}
-              >
-                {distance.toFixed(2)} km
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: "#475569" }}>
-                Total Route Distance
-              </p>
+              <p className="syne font-bold text-lg" style={{ color: "#f1f5f9", letterSpacing: "-0.02em" }}>{distance.toFixed(2)} km</p>
+              <p className="text-xs mt-0.5" style={{ color: "#475569" }}>Total Route Distance</p>
             </div>
           </div>
         </div>
@@ -525,84 +371,29 @@ const LandingPage = () => {
       {tripData && (
         <div ref={resultsRef} className="px-8 pb-10 flex justify-center">
           <div className="grad-border-wrap w-full max-w-2xl">
-            <div
-              className="rounded-[21px] p-8"
-              style={{ background: "#0a0d1a" }}
-            >
-              <p
-                className="syne text-xs font-bold uppercase tracking-widest text-center mb-2"
-                style={{ color: "#38bdf8" }}
-              >
-                Results
-              </p>
-              <h3
-                className="syne font-extrabold text-center mb-7 grad-text"
-                style={{ fontSize: "1.4rem", letterSpacing: "-0.02em" }}
-              >
-                ⚡ Trip Analysis
-              </h3>
+            <div className="rounded-[21px] p-8" style={{ background: "#0a0d1a" }}>
+              <p className="syne text-xs font-bold uppercase tracking-widest text-center mb-2" style={{ color: "#38bdf8" }}>Results</p>
+              <h3 className="syne font-extrabold text-center mb-7 grad-text" style={{ fontSize: "1.4rem", letterSpacing: "-0.02em" }}>⚡ Trip Analysis</h3>
 
               {tripData.recommendedStops?.some((s) => s.isSynthetic) && (
-                <div
-                  className="mb-5 p-4 rounded-xl text-sm"
-                  style={{
-                    background: "rgba(234,179,8,.12)",
-                    border: "1px solid rgba(234,179,8,.3)",
-                    color: "#fde68a",
-                  }}
-                >
-                  ⚠️ Some stops are <strong>suggested plan-ahead points</strong>{" "}
-                  — real charging stations may be sparse in this corridor. Check{" "}
-                  <a
-                    href="https://www.plugshare.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline"
-                  >
-                    PlugShare
-                  </a>{" "}
-                  for verified chargers.
+                <div className="mb-5 p-4 rounded-xl text-sm" style={{ background: "rgba(234,179,8,.12)", border: "1px solid rgba(234,179,8,.3)", color: "#fde68a" }}>
+                  ⚠️ Some stops are <strong>suggested plan-ahead points</strong> — real charging stations may be sparse in this corridor. Check{" "}
+                  <a href="https://www.plugshare.com" target="_blank" rel="noreferrer" className="underline">PlugShare</a> for verified chargers.
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  {
-                    label: "Energy Required",
-                    value: `⚡ ${tripData.totalEnergyRequired} kWh`,
-                  },
-                  {
-                    label: "Charging Stops",
-                    value: `🔌 ${tripData.totalStops}`,
-                  },
-                  {
-                    label: "Charging Time",
-                    value: `⏱️ ${tripData.totalChargingTimeHours} hrs`,
-                  },
-                  { label: "Safe Range", value: `📏 ${tripData.safeRange} km` },
-                  { label: "Final Battery", value: `🔋 ${tripData.finalSoC}%` },
-                  {
-                    label: "Estimated Cost",
-                    value: `💰 ₹${tripData.totalCost}`,
-                    green: true,
-                  },
+                  { label: "Energy Required", value: `⚡ ${tripData.totalEnergyRequired} kWh` },
+                  { label: "Charging Stops",  value: `🔌 ${tripData.totalStops}` },
+                  { label: "Charging Time",   value: `⏱️ ${tripData.totalChargingTimeHours} hrs` },
+                  { label: "Safe Range",      value: `📏 ${tripData.safeRange} km` },
+                  { label: "Final Battery",   value: `🔋 ${tripData.finalSoC}%` },
+                  { label: "Estimated Cost",  value: `💰 ₹${tripData.totalCost}`, green: true },
                 ].map((s) => (
                   <div key={s.label} className="trip-cell">
-                    <p
-                      className="syne text-xs font-bold uppercase tracking-widest mb-2"
-                      style={{ color: "#475569" }}
-                    >
-                      {s.label}
-                    </p>
-                    <p
-                      className="syne font-bold text-lg"
-                      style={{
-                        color: s.green ? "#34d399" : "#e2e8f0",
-                        letterSpacing: "-0.01em",
-                      }}
-                    >
-                      {s.value}
-                    </p>
+                    <p className="syne text-xs font-bold uppercase tracking-widest mb-2" style={{ color: "#475569" }}>{s.label}</p>
+                    <p className="syne font-bold text-lg" style={{ color: s.green ? "#34d399" : "#e2e8f0", letterSpacing: "-0.01em" }}>{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -615,152 +406,70 @@ const LandingPage = () => {
       {tripData?.recommendedStops?.length > 0 && (
         <div className="px-8 pb-16">
           <div className="text-center mb-10">
-            <p
-              className="syne text-xs font-bold uppercase tracking-widest mb-2"
-              style={{ color: "#38bdf8" }}
-            >
-              Route Stops
-            </p>
-            <h3
-              className="syne font-extrabold"
-              style={{
-                fontSize: "clamp(1.5rem, 2.5vw, 2rem)",
-                letterSpacing: "-0.025em",
-                color: "#f1f5f9",
-              }}
-            >
+            <p className="syne text-xs font-bold uppercase tracking-widest mb-2" style={{ color: "#38bdf8" }}>Route Stops</p>
+            <h3 className="syne font-extrabold" style={{ fontSize: "clamp(1.5rem, 2.5vw, 2rem)", letterSpacing: "-0.025em", color: "#f1f5f9" }}>
               ⚡ Charging Stops Along Your Journey
             </h3>
             <div className="sec-divider" />
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {tripData.recommendedStops.map(
-              (
-                stop,
-                index, // ✅ fixed: removed stray `;` after closing `)`
-              ) => (
-                <div key={index} className="stop-outer">
-                  <div className="stop-inner">
-                    <div>
-                      <div className="flex justify-between items-center mb-4">
-                        <span
-                          className="syne text-xs font-bold uppercase tracking-widest"
-                          style={{ color: "#475569" }}
-                        >
-                          Stop #{String(index + 1).padStart(2, "0")}
-                        </span>
-                        <span
-                          className="syne text-xs font-bold px-3 py-1 rounded-full"
-                          style={
-                            stop.isSynthetic
-                              ? {
-                                  background: "rgba(234,179,8,.15)",
-                                  border: "1px solid rgba(234,179,8,.3)",
-                                  color: "#fde68a",
-                                }
-                              : {
-                                  background: "rgba(56,189,248,.1)",
-                                  border: "1px solid rgba(56,189,248,.2)",
-                                  color: "#38bdf8",
-                                }
-                          }
-                        >
-                          {stop.isSynthetic
-                            ? "⚠️ Plan Ahead"
-                            : "⚡ Charging Point"}
-                        </span>
-                      </div>
-
-                      <h4
-                        className="syne font-bold mb-2"
-                        style={{
-                          fontSize: "1rem",
-                          color: "#e2e8f0",
-                          letterSpacing: "-0.01em",
-                        }}
-                      >
-                        🔌 {stop.stationName}
-                      </h4>
-                      <p className="text-sm mb-4" style={{ color: "#475569" }}>
-                        📍 {stop.lat?.toFixed(3)}, {stop.lng?.toFixed(3)}
-                      </p>
-
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-xs" style={{ color: "#475569" }}>
-                          Distance
-                        </span>
-                        <span
-                          className="syne text-sm font-bold"
-                          style={{ color: "#94a3b8" }}
-                        >
-                          🚗 {stop.cumulativeDistance} km
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-xs" style={{ color: "#475569" }}>
-                          Arrival SoC
-                        </span>
-                        <span
-                          className="syne text-sm font-bold"
-                          style={{
-                            color: stop.arrivalSoC < 20 ? "#f87171" : "#34d399",
-                          }}
-                        >
-                          🔋 {stop.arrivalSoC}%
-                        </span>
-                      </div>
-                      <div
-                        className="w-full rounded-full"
-                        style={{
-                          height: 4,
-                          background: "rgba(255,255,255,.07)",
-                          marginBottom: 8,
-                        }}
-                      >
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.min((stop.cumulativeDistance / (tripData.totalDistance || 1)) * 100, 100)}%`,
-                            background:
-                              "linear-gradient(90deg, #34d399, #38bdf8)",
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div
-                      className="flex justify-between items-center"
-                      style={{ marginTop: 16 }}
-                    >
-                      <a
-                        href={`https://www.google.com/maps?q=${stop.lat},${stop.lng}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="syne text-xs font-bold flex items-center gap-1.5"
-                        style={{ color: "#38bdf8", textDecoration: "none" }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.color = "#7dd3fc")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.color = "#38bdf8")
-                        }
-                      >
-                        <Navigation size={12} /> Navigate
-                      </a>
+            {tripData.recommendedStops.map((stop, index) => (   // ✅ fixed: removed stray `;` after closing `)`
+              <div key={index} className="stop-outer">
+                <div className="stop-inner">
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="syne text-xs font-bold uppercase tracking-widest" style={{ color: "#475569" }}>
+                        Stop #{String(index + 1).padStart(2, "0")}
+                      </span>
                       <span
-                        className="syne text-xs"
-                        style={{ color: "#334155" }}
+                        className="syne text-xs font-bold px-3 py-1 rounded-full"
+                        style={stop.isSynthetic
+                          ? { background: "rgba(234,179,8,.15)", border: "1px solid rgba(234,179,8,.3)", color: "#fde68a" }
+                          : { background: "rgba(56,189,248,.1)", border: "1px solid rgba(56,189,248,.2)", color: "#38bdf8" }}
                       >
-                        {stop.isSynthetic
-                          ? "No real station found"
-                          : "Optimized Stop"}
+                        {stop.isSynthetic ? "⚠️ Plan Ahead" : "⚡ Charging Point"}
                       </span>
                     </div>
+
+                    <h4 className="syne font-bold mb-2" style={{ fontSize: "1rem", color: "#e2e8f0", letterSpacing: "-0.01em" }}>
+                      🔌 {stop.stationName}
+                    </h4>
+                    <p className="text-sm mb-4" style={{ color: "#475569" }}>📍 {stop.lat?.toFixed(3)}, {stop.lng?.toFixed(3)}</p>
+
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-xs" style={{ color: "#475569" }}>Distance</span>
+                      <span className="syne text-sm font-bold" style={{ color: "#94a3b8" }}>🚗 {stop.cumulativeDistance} km</span>
+                    </div>
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs" style={{ color: "#475569" }}>Arrival SoC</span>
+                      <span className="syne text-sm font-bold" style={{ color: stop.arrivalSoC < 20 ? "#f87171" : "#34d399" }}>
+                        🔋 {stop.arrivalSoC}%
+                      </span>
+                    </div>
+                    <div className="w-full rounded-full" style={{ height: 4, background: "rgba(255,255,255,.07)", marginBottom: 8 }}>
+                      <div className="h-full rounded-full" style={{ width: `${Math.min((stop.cumulativeDistance / (tripData.totalDistance || 1)) * 100, 100)}%`, background: "linear-gradient(90deg, #34d399, #38bdf8)" }} />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center" style={{ marginTop: 16 }}>
+                    <a
+                      href={`https://www.google.com/maps?q=${stop.lat},${stop.lng}`}
+                      target="_blank" rel="noreferrer"
+                      className="syne text-xs font-bold flex items-center gap-1.5"
+                      style={{ color: "#38bdf8", textDecoration: "none" }}
+                      onMouseEnter={e => e.currentTarget.style.color = "#7dd3fc"}
+                      onMouseLeave={e => e.currentTarget.style.color = "#38bdf8"}
+                    >
+                      <Navigation size={12} /> Navigate
+                    </a>
+                    <span className="syne text-xs" style={{ color: "#334155" }}>
+                      {stop.isSynthetic ? "No real station found" : "Optimized Stop"}
+                    </span>
                   </div>
                 </div>
-              ),
-            )}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -768,24 +477,12 @@ const LandingPage = () => {
       {/* ══════════ SOC CURVE ══════════ */}
       {socCurve.length > 0 && (
         <div className="px-8 pb-20">
-          <div
-            className="p-7 rounded-2xl"
-            style={{
-              background: "rgba(255,255,255,.025)",
-              border: "1px solid rgba(255,255,255,.07)",
-              minHeight: 400,
-            }}
-          >
+          <div className="p-7 rounded-2xl" style={{ background: "rgba(255,255,255,.025)", border: "1px solid rgba(255,255,255,.07)", minHeight: 400 }}>
             {socReady ? (
-              <SocCurve
-                socCurve={socCurve}
-                reservePercentage={Number(form.reserve)}
-              />
+              <SocCurve socCurve={socCurve} reservePercentage={Number(form.reserve)} />
             ) : (
               <div className="flex items-center justify-center h-64">
-                <div className="syne text-sm" style={{ color: "#475569" }}>
-                  Loading chart...
-                </div>
+                <div className="syne text-sm" style={{ color: "#475569" }}>Loading chart...</div>
               </div>
             )}
           </div>
@@ -805,10 +502,7 @@ const LandingPage = () => {
               animation: "vp-bounce 1.6s infinite",
             }}
           >
-            <span
-              className="syne text-sm font-semibold"
-              style={{ color: "#e2e8f0" }}
-            >
+            <span className="syne text-sm font-semibold" style={{ color: "#e2e8f0" }}>
               View Trip Analysis
             </span>
             <div

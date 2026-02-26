@@ -328,7 +328,7 @@ export const planEVTripCore = async (payload) => {
 
     if (usableRangeKm() >= remainingTripKm) {
       console.log(
-        `✅ Can reach destination. Range left=${usableRangeKm().toFixed(1)}km`,
+        ` Can reach destination. Range left=${usableRangeKm().toFixed(1)}km`,
       );
       break;
     }
@@ -370,7 +370,7 @@ export const planEVTripCore = async (payload) => {
         );
         if (best) {
           chosen = best;
-          console.log(`✅ Pass 1 station @ r=${r}km: "${best.stationName}"`);
+          console.log(`Pass 1 station @ r=${r}km: "${best.stationName}"`);
           break;
         }
       }
@@ -397,7 +397,7 @@ export const planEVTripCore = async (payload) => {
         if (best) {
           chosen = best;
           console.log(
-            `✅ Pass 2 station @ r=${r}km (tight detour): "${best.stationName}"`,
+            ` Pass 2 station @ r=${r}km (tight detour): "${best.stationName}"`,
           );
           break;
         }
@@ -491,7 +491,7 @@ export const planEVTripCore = async (payload) => {
     recommendedStops.push(stopRecord);
 
     console.log(
-      `✅ Stop ${recommendedStops.length}: "${chosen.stationName}" ` +
+      `Stop ${recommendedStops.length}: "${chosen.stationName}" ` +
         `@ ${chosen.routeKm.toFixed(1)}km | arrivalSoC=${chosen.arrivalSoC.toFixed(1)}% ` +
         `| synthetic=${chosen.isSynthetic || false}`,
     );

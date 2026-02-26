@@ -64,20 +64,40 @@ const AdvancedLandingPage = () => {
     return "Heavy";
   }, [sim.trafficLevel]);
 
+  // const handleSubmit = () => {
+  //   setTripData(null);
+  //   setSocCurve([]);
+  //   setSocReady(false);
+  //   setDistance(0);
+  //   setDuration(0);
+  //   setRoutePolyline(null);
+  //   distanceRef.current = 0;
+  //   durationRef.current = 0;
+  //   routePolylineRef.current = null;
+  //   setShowMap(true);
+  //   setLoading(true);
+  //   tripSessionRef.current += 1;
+  // };
   const handleSubmit = () => {
+    tripSessionRef.current += 1;
     setTripData(null);
     setSocCurve([]);
     setSocReady(false);
-    setDistance(0);
-    setDuration(0);
-    setRoutePolyline(null);
-    distanceRef.current = 0;
-    durationRef.current = 0;
-    routePolylineRef.current = null;
     setShowMap(true);
-    setLoading(true);
-    tripSessionRef.current += 1;
-  };
+
+    // If route already exists in refs, replan immediately
+    if (distanceRef.current && routePolylineRef.current?.length >= 2) {
+        advancedPlanTrip();
+    } else {
+        // Fresh route needed — reset everything so MapComponent refetches
+        setDistance(0);
+        setDuration(0);
+        setRoutePolyline(null);
+        distanceRef.current = 0;
+        durationRef.current = 0;
+        routePolylineRef.current = null;
+    }
+};
 
   const handleRouteReady = ({ distance, duration, polyline }) => {
     distanceRef.current = distance;
@@ -88,14 +108,21 @@ const AdvancedLandingPage = () => {
     setRoutePolyline(polyline);
   };
 
+  // useEffect(() => {
+  //   if (!distance || !routePolyline || !showMap) return;
+  //   clearTimeout(timeoutRef.current);
+  //   timeoutRef.current = setTimeout(() => {
+  //     advancedPlanTrip();
+  //   }, 450);
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [distance, routePolyline, sim, form, showMap]);
   useEffect(() => {
     if (!distance || !routePolyline || !showMap) return;
     clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       advancedPlanTrip();
     }, 450);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distance, routePolyline, sim, form, showMap]);
+}, [distance, routePolyline]); // ← only replan when NEW route arrives
 
   const advancedPlanTrip = async () => {
     const session = tripSessionRef.current;
@@ -291,12 +318,12 @@ const AdvancedLandingPage = () => {
                   </p>
                 </div>
               </div>
-              <button
+              {/* <button
                 onClick={() => setShowMap(true)}
                 className="w-full bg-blue-500/90 hover:bg-blue-500 py-3 rounded-lg font-semibold transition"
               >
-                🗺️ Show Map
-              </button>
+                Show Map
+              </button> */}
             </div>
           </div>
 
@@ -576,12 +603,12 @@ const AdvancedLandingPage = () => {
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-semibold">🗺️ Route + Charging Stops</h3>
-              <button
-                onClick={() => setShowMap(false)}
-                className="text-sm px-3 py-1 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 transition"
-              >
-                Close
-              </button>
+             <button
+    onClick={handleSubmit}
+    className="w-full bg-blue-500/90 hover:bg-blue-500 py-3 rounded-lg font-semibold transition"
+>
+    🗺️ Show Map & Plan
+</button>
             </div>
             <MapComponent
               start={form.start}

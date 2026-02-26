@@ -318,12 +318,12 @@ const AdvancedLandingPage = () => {
                   </p>
                 </div>
               </div>
-              {/* <button
+              <button
                 onClick={() => setShowMap(true)}
                 className="w-full bg-blue-500/90 hover:bg-blue-500 py-3 rounded-lg font-semibold transition"
               >
                 Show Map
-              </button> */}
+              </button>
             </div>
           </div>
 
